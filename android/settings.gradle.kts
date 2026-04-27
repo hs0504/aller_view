@@ -3,12 +3,15 @@ pluginManagement {
         run {
             val properties = java.util.Properties()
             file("local.properties").inputStream().use { properties.load(it) }
-            val flutterSdkPath = properties.getProperty("flutter.sdk")
+//            val flutterSdkPath = properties.getProperty("flutter.sdk") <-- 윈도우
+            val flutterSdkPath = properties.getProperty("flutter.sdk")?.replace("\\", "/") // 경로 변경
+
             require(flutterSdkPath != null) { "flutter.sdk not set in local.properties" }
             flutterSdkPath
         }
 
-    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+//    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle") <-- 윈도우
+    includeBuild("${flutterSdkPath}/packages/flutter_tools/gradle") // POSIX 스타일로 변경
 
     repositories {
         google()
@@ -20,7 +23,6 @@ pluginManagement {
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "8.9.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.1.0" apply false
+    id("org.jetbrains.kotlin.android") version "2.3.0" apply false
 }
-
 include(":app")
