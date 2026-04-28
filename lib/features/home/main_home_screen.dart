@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../core/data/allergy_data.dart';
 import '../../core/storage/user_prefs.dart';
 import '../camera/menu_camera_screen.dart';
+import '../location/location_screen.dart';
 import '../onboarding/allergy_selection_screen.dart';
 import '../onboarding/preference_selection_screen.dart';
 
@@ -182,7 +183,14 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                     icon: Icons.location_on,
                     title: '주변 식당 찾기',
                     desc: '현재 위치 기반 식당 탐색',
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const LocationScreen(),
+                        ),
+                      );
+                    },
                   ),
                   _QuickMenuCard(
                     icon: Icons.translate_outlined,

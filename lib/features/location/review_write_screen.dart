@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../network/dio_client.dart';
+import '../../core/network/dio_client.dart';
 
 class ReviewWriteScreen extends StatefulWidget {
   final String placeId;

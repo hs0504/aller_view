@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../network/dio_client.dart';
-import '../../services/auth_service.dart';
+import '../../core/network/dio_client.dart';
+import '../../service/auth_service.dart';
 import 'review_write_screen.dart';
 
 class RestaurantDetailScreen extends StatefulWidget {

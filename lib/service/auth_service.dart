@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import '../network/dio_client.dart';
+import '../core/network/dio_client.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();

@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 
-import '../../network/dio_client.dart';
+import '../../core/network/dio_client.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'restaurant_detail_screen.dart';
 
@@ -18,6 +18,8 @@ class LocationScreen extends StatefulWidget {
 
 class _LocationScreenState extends State<LocationScreen> {
   final Completer<GoogleMapController> _controllerCompleter = Completer();
+  // 패널 표시 여부를 제어하는 상태 변수. 필요에 따라 true/false로 바꿔 테스트할 수 있습니다.
+  final bool _showPanel = true;
   final Location _location = Location();
   LatLng _currentPosition = const LatLng(37.5664, 126.9778); // 기본 위치 (서울)
   List<dynamic> _restaurants = [];
@@ -107,99 +109,115 @@ class _LocationScreenState extends State<LocationScreen> {
     return _restaurants
         .where(
           (r) => r['name']
-              .toString()
-              .toLowerCase()
-              .contains(_searchQuery.toLowerCase()),
-        )
+          .toString()
+          .toLowerCase()
+          .contains(_searchQuery.toLowerCase()),
+    )
         .map((r) {
-          return Marker(
-            markerId: MarkerId(r['id']),
-            position: LatLng(r['latitude'], r['longitude']),
-            infoWindow: InfoWindow(
-              title: r['name'],
-              snippet: '${r['type']} · ❤️ ${r['positive_count']} 💔 ${r['negative_count']}',
-            ),
-          );
-        })
+      return Marker(
+          markerId: MarkerId(r['id']),
+          position: LatLng(r['latitude'], r['longitude']),
+          infoWindow: InfoWindow(
+            title: r['name'],
+            snippet: '${r['type']} · ❤️ ${r['positive_count']} 💔 ${r['negative_count']}',
+          ),
+          onTap: () {
+            // 마커를 탭했을 때 패널을 열고 싶다면 이 코드를 사용하세요.
+            if (!_panelController.isPanelOpen) {
+              _panelController.open();
+            }
+          }
+      );
+    })
         .toSet();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: SlidingUpPanel(
-          controller: _panelController,
-          minHeight: 80,
-          maxHeight: MediaQuery.of(context).size.height * 0.5,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          panel: _buildRestaurantList(),
-          body: Stack(
-            children: [
-              GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: _currentPosition,
-                  zoom: 16.0,
-                ),
-                myLocationEnabled: true,
-                markers: _buildMarkers(),
-                mapType: MapType.normal,
-                onMapCreated: (GoogleMapController controller) {
-                  if (!_controllerCompleter.isCompleted) {
-                    _controllerCompleter.complete(controller);
-                  }
-                },
-              ),
+    // 1. 지도와 검색창을 포함하는 body 부분을 별도 변수로 추출
+    final mapBody = Stack(
+      children: [
+        GoogleMap(
+          initialCameraPosition: CameraPosition(
+            target: _currentPosition,
+            zoom: 16.0,
+          ),
+          myLocationEnabled: true,
+          markers: _buildMarkers(),
+          mapType: MapType.normal,
+          padding: const EdgeInsets.only(bottom: 160),
+          onMapCreated: (GoogleMapController controller) {
+            if (!_controllerCompleter.isCompleted) {
+              _controllerCompleter.complete(controller);
+            }
+          },
+        ),
 
-              // 검색창
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  color: Colors.white.withOpacity(0.9),
-                  child: Row(
-                    children: [
-                      const BackButton(color: Colors.black),
-                      Expanded(
-                        child: TextField(
-                          onChanged: (value) {
-                            setState(() {
-                              _searchQuery = value;
-                            });
-                          },
-                          style: const TextStyle(fontSize: 16),
-                          decoration: InputDecoration(
-                            hintText: "식당 이름을 검색하세요...",
-                            hintStyle: TextStyle(color: Colors.grey[400]),
-                            filled: true,
-                            fillColor: Colors.grey[100],
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 0,
-                              horizontal: 16,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
+        // 검색창
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 8,
+            ),
+            color: Colors.white.withOpacity(0.9),
+            child: Row(
+              children: [
+                const BackButton(color: Colors.black),
+                Expanded(
+                  child: TextField(
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                      });
+                    },
+                    style: const TextStyle(fontSize: 16),
+                    decoration: InputDecoration(
+                      hintText: "식당 이름을 검색하세요...",
+                      hintStyle: TextStyle(color: Colors.grey[400]),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 0,
+                        horizontal: 16,
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.search, color: Colors.black),
-                        onPressed: () {},
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+                IconButton(
+                  icon: const Icon(Icons.search, color: Colors.black),
+                  onPressed: () {
+                    // 키보드 숨기기 등 검색 로직 추가 가능
+                    FocusScope.of(context).unfocus();
+                  },
+                ),
+              ],
+            ),
           ),
         ),
+      ],
+    );
+
+    return Scaffold(
+      body: SafeArea(
+        // 2. _showPanel 값에 따라 조건부로 위젯 렌더링
+        child: _showPanel
+            ? SlidingUpPanel(
+          controller: _panelController,
+          minHeight: 160,
+          maxHeight: MediaQuery.of(context).size.height * 0.5,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          panel: _buildRestaurantList(), // 이제 패널 위젯을 정상적으로 사용
+          body: mapBody, // 위에서 정의한 mapBody 사용
+        )
+            : mapBody, // _showPanel이 false이면 패널 없이 mapBody만 표시
       ),
     );
   }
@@ -208,18 +226,12 @@ class _LocationScreenState extends State<LocationScreen> {
     final filtered = _restaurants
         .where(
           (r) => _searchQuery.isEmpty ||
-              r['name']
-                  .toString()
-                  .toLowerCase()
-                  .contains(_searchQuery.toLowerCase()),
-        )
+          r['name']
+              .toString()
+              .toLowerCase()
+              .contains(_searchQuery.toLowerCase()),
+    )
         .toList();
-
-    for (int i=0;i<filtered.length;i++){
-      if(kDebugMode){
-        print("restaurant [$i] : ${filtered[i]['name']}");
-      }
-    }
 
     return Column(
       children: [
@@ -251,103 +263,103 @@ class _LocationScreenState extends State<LocationScreen> {
           child: filtered.isEmpty
               ? const Center(child: Text("근처 식당 정보를 불러오는 중..."))
               : ListView.builder(
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final r = filtered[index];
-                    return GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RestaurantDetailScreen(
-                            placeId: r['id'],
-                            name: r['name'],
-                            address: r['address'],
-                            businessType: r['type'],
-                          ),
+            itemCount: filtered.length,
+            itemBuilder: (context, index) {
+              final r = filtered[index];
+              return GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => RestaurantDetailScreen(
+                      placeId: r['id'],
+                      name: r['name'],
+                      address: r['address'],
+                      businessType: r['type'],
+                    ),
+                  ),
+                ),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.07),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.restaurant,
+                        size: 32,
+                        color: Colors.pink[300],
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              r['name'],
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              r['type'],
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Container(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.07),
-                            blurRadius: 6,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Row(
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Icon(
-                            Icons.restaurant,
-                            size: 32,
-                            color: Colors.pink[300],
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  r['name'],
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  r['type'],
-                                  style: const TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          Row(
                             children: [
-                              Row(
-                                children: [
-                                  const Text('❤️', style: TextStyle(fontSize: 14)),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '${r['positive_count']}',
-                                    style: const TextStyle(fontSize: 13, color: Colors.black87),
-                                  ),
-                                ],
+                              const Text('❤️', style: TextStyle(fontSize: 14)),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${r['positive_count']}',
+                                style: const TextStyle(fontSize: 13, color: Colors.black87),
                               ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Text('💔', style: TextStyle(fontSize: 14)),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '${r['negative_count']}',
-                                    style: const TextStyle(fontSize: 13, color: Colors.black87),
-                                  ),
-                                ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Text('💔', style: TextStyle(fontSize: 14)),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${r['negative_count']}',
+                                style: const TextStyle(fontSize: 13, color: Colors.black87),
                               ),
                             ],
                           ),
                         ],
                       ),
-                    ),
-                  );
-                  },
+                    ],
+                  ),
                 ),
+              );
+            },
+          ),
         ),
       ],
     );
