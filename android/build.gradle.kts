@@ -12,8 +12,8 @@ val newBuildDir: Directory =
 rootProject.layout.buildDirectory.value(newBuildDir)
 
 subprojects {
-//    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name) 윈도우
-    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name.replace("\\", "/"))
+    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name) // 윈도우
+//    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name.replace("\\", "/"))
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 subprojects {

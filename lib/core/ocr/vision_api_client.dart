@@ -51,23 +51,129 @@ class VisionApiClient {
       throw VisionApiException('서버 오류가 발생했습니다. (${response.statusCode})');
     }
 
-
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final responses = body['responses'] as List<dynamic>;
-    final annotations = responses.first['textAnnotations'] as List<dynamic>?;
-
-    if (annotations == null || annotations.isEmpty) {
-      return const OcrResult(fullText: '', lines: []);
+    if (responses.isEmpty) {
+      return const OcrResult(
+        fullText: '',
+        lines: [],
+        strategy: OcrExtractionStrategy.legacyTextAnnotations,
+      );
     }
 
-    final fullText = annotations.first['description'] as String;
+    final firstResponse = responses.first as Map<String, dynamic>;
+
+    final blockResult = _extractFromBlocks(firstResponse);
+    if (blockResult != null && !blockResult.isEmpty) {
+      return blockResult;
+    }
+
+    final legacyResult = _extractFromLegacyTextAnnotations(firstResponse);
+    if (legacyResult != null) {
+      return legacyResult;
+    }
+
+    return const OcrResult(
+      fullText: '',
+      lines: [],
+      strategy: OcrExtractionStrategy.legacyTextAnnotations,
+    );
+  }
+
+  static OcrResult? _extractFromBlocks(Map<String, dynamic> responseJson) {
+    final fullTextAnnotation =
+        responseJson['fullTextAnnotation'] as Map<String, dynamic>?;
+    final pages = fullTextAnnotation?['pages'] as List<dynamic>?;
+
+    if (pages == null || pages.isEmpty) {
+      return null;
+    }
+
+    final lines = <String>[];
+
+    for (final page in pages) {
+      final pageJson = page as Map<String, dynamic>;
+      final blocks = pageJson['blocks'] as List<dynamic>? ?? const [];
+
+      for (final block in blocks) {
+        final blockText = _extractBlockText(block as Map<String, dynamic>);
+        if (blockText.isEmpty) continue;
+        lines.add(blockText);
+      }
+    }
+
+    if (lines.isEmpty) {
+      return null;
+    }
+
+    return OcrResult(
+      fullText: lines.join('\n'),
+      lines: lines,
+      strategy: OcrExtractionStrategy.blocks,
+    );
+  }
+
+  static String _extractBlockText(Map<String, dynamic> blockJson) {
+    final paragraphs = blockJson['paragraphs'] as List<dynamic>? ?? const [];
+    final paragraphTexts = <String>[];
+
+    for (final paragraph in paragraphs) {
+      final paragraphJson = paragraph as Map<String, dynamic>;
+      final words = paragraphJson['words'] as List<dynamic>? ?? const [];
+      final wordTexts = <String>[];
+
+      for (final word in words) {
+        final wordText = _extractWordText(word as Map<String, dynamic>);
+        if (wordText.isNotEmpty) {
+          wordTexts.add(wordText);
+        }
+      }
+
+      final paragraphText = wordTexts.join(' ').trim();
+      if (paragraphText.isNotEmpty) {
+        paragraphTexts.add(paragraphText);
+      }
+    }
+
+    return paragraphTexts.join(' ').trim();
+  }
+
+  static String _extractWordText(Map<String, dynamic> wordJson) {
+    final symbols = wordJson['symbols'] as List<dynamic>? ?? const [];
+    final buffer = StringBuffer();
+
+    for (final symbol in symbols) {
+      final symbolJson = symbol as Map<String, dynamic>;
+      final text = symbolJson['text'] as String? ?? '';
+      if (text.isNotEmpty) {
+        buffer.write(text);
+      }
+    }
+
+    return buffer.toString().trim();
+  }
+
+  static OcrResult? _extractFromLegacyTextAnnotations(
+    Map<String, dynamic> responseJson,
+  ) {
+    final annotations = responseJson['textAnnotations'] as List<dynamic>?;
+
+    if (annotations == null || annotations.isEmpty) {
+      return null;
+    }
+
+    final fullText = annotations.first['description'] as String? ?? '';
     final lines = fullText
         .split('\n')
         .map((l) => l.trim())
         .where((l) => l.isNotEmpty)
         .toList();
 
-    return OcrResult(fullText: fullText, lines: lines);
+    return OcrResult(
+      fullText: fullText,
+      lines: lines,
+      strategy: OcrExtractionStrategy.legacyTextAnnotations,
+    );
   }
 }
 
