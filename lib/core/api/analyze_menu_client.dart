@@ -34,27 +34,56 @@ class AnalyzeMenuClient {
         .toList();
   }
 
-  static Map<String, dynamic> buildRequestBody(List<String> lines) {
+  static Map<String, dynamic> buildRequestBody(
+    List<String> lines, {
+    String departureLanguage = 'ja',
+    String arrivalLanguage = 'ko',
+    List<String> userAllergies = const [],
+    Map<String, int> userPreferences = const {},
+  }) {
     final menuItems = buildMenuItems(lines);
     return {
+      'departure_language': departureLanguage,
+      'arrival_language': arrivalLanguage,
+      'user_allergies': userAllergies,
+      'user_preferences': userPreferences,
       'menu_items': menuItems.map((e) => e.toJson()).toList(),
     };
   }
 
-  static String buildPrettyRequestJson(List<String> lines) {
-    return const JsonEncoder.withIndent('  ').convert(buildRequestBody(lines));
-  }
-
-  static String buildPrettyRequestJsonFromRawText(String rawText) {
-    return buildPrettyRequestJson(buildLinesFromRawText(rawText));
+  static String buildPrettyRequestJson(
+    List<String> lines, {
+    String departureLanguage = 'ja',
+    String arrivalLanguage = 'ko',
+    List<String> userAllergies = const [],
+    Map<String, int> userPreferences = const {},
+  }) {
+    return const JsonEncoder.withIndent('  ').convert(
+      buildRequestBody(
+        lines,
+        departureLanguage: departureLanguage,
+        arrivalLanguage: arrivalLanguage,
+        userAllergies: userAllergies,
+        userPreferences: userPreferences,
+      ),
+    );
   }
 
   static String get requestUrl => Uri.parse('$_baseUrl$_endpoint').toString();
 
   /// OCR 줄 목록을 AI 서버로 전송하여 번역/정규화 결과를 반환합니다.
   ///
+  /// [departureLanguage] : 메뉴판 원본 언어 코드 (ISO 639-1, 예: 'ja', 'zh', 'en')
+  /// [arrivalLanguage]   : 번역 목표 언어 코드 (ISO 639-1, 예: 'ko')
+  ///
   /// Throws [AnalyzeMenuException] on network error or server error.
-  static Future<AnalyzeMenuResponse> analyzeMenu(List<String> lines) async {
+  static Future<AnalyzeMenuResponse> analyzeMenu(
+    List<String> lines, {
+    String departureLanguage = 'ja',
+    String arrivalLanguage = 'ko',
+    List<String> userAllergies = const [],
+    Map<String, int> userPreferences = const {},
+  }) async {
     if (_baseUrl.contains('YOUR_SERVER_URL')) {
       throw const AnalyzeMenuException(
         'AnalyzeMenuClient의 baseUrl을 실제 서버 주소로 변경해 주세요.',
@@ -62,7 +91,13 @@ class AnalyzeMenuClient {
     }
 
     final menuItems = buildMenuItems(lines);
-    final requestBody = buildRequestBody(lines);
+    final requestBody = buildRequestBody(
+      lines,
+      departureLanguage: departureLanguage,
+      arrivalLanguage: arrivalLanguage,
+      userAllergies: userAllergies,
+      userPreferences: userPreferences,
+    );
     final requestJson = const JsonEncoder.withIndent('  ').convert(requestBody);
     final requestUrl = _buildRequestUrl(requestBody);
 
@@ -71,7 +106,7 @@ class AnalyzeMenuClient {
     debugPrint(
       '│ [AnalyzeMenu] ${_requestMethod.name.toUpperCase()} 요청 → $requestUrl',
     );
-    debugPrint('│ 항목 수: ${menuItems.length}개');
+    debugPrint('│ 항목 수: ${menuItems.length}개  |  $departureLanguage → $arrivalLanguage');
     debugPrint('├─────────────────────────────────────────');
     debugPrint(requestJson);
     debugPrint('└─────────────────────────────────────────');
@@ -142,6 +177,8 @@ class AnalyzeMenuClient {
     }
 
     return baseUri.replace(queryParameters: {
+      'departure_language': requestBody['departure_language'],
+      'arrival_language': requestBody['arrival_language'],
       'menu_items': jsonEncode(requestBody['menu_items']),
     }).toString();
   }

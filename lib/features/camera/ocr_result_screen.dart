@@ -1,18 +1,28 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/api/analyze_menu_client.dart';
 import '../../core/api/analyze_menu_result.dart';
 import '../../core/ocr/ocr_result.dart';
+import '../../core/storage/user_prefs.dart';
+// TODO(overlay-dummy): 더미 테스트 완료 후 아래 import 제거
+import 'overlay_result_screen.dart';
 
 class OcrResultScreen extends StatefulWidget {
   const OcrResultScreen({
     super.key,
     required this.imageBytes,
+    required this.imageWidth,
+    required this.imageHeight,
     required this.ocrResult,
   });
 
   final Uint8List imageBytes;
+  final double imageWidth;
+  final double imageHeight;
   final OcrResult ocrResult;
 
   @override
@@ -21,6 +31,29 @@ class OcrResultScreen extends StatefulWidget {
 
 class _OcrResultScreenState extends State<OcrResultScreen> {
   bool _isLoading = false;
+  String _departureLanguage = 'ja';
+  String _arrivalLanguage = 'ko';
+  List<String> _userAllergies = [];
+  Map<String, int> _userPreferences = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserSettings();
+  }
+
+  Future<void> _loadUserSettings() async {
+    final settings = await UserPrefs.loadLanguageSettings();
+    final allergyIndices = await UserPrefs.loadAllergyIndices();
+    final preferenceScores = await UserPrefs.loadPreferenceScores();
+    if (!mounted) return;
+    setState(() {
+      _departureLanguage = settings.departure;
+      _arrivalLanguage = settings.arrival;
+      _userAllergies = UserPrefs.allergyNamesFromIndices(allergyIndices);
+      _userPreferences = UserPrefs.preferenceScoresToEn(preferenceScores);
+    });
+  }
 
   void _showRequestPreview({
     required List<String> lines,
@@ -34,7 +67,13 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
       builder: (_) => _RequestPreviewBottomSheet(
         title: title,
         requestUrl: AnalyzeMenuClient.requestUrl,
-        requestJson: AnalyzeMenuClient.buildPrettyRequestJson(lines),
+        requestJson: AnalyzeMenuClient.buildPrettyRequestJson(
+          lines,
+          departureLanguage: _departureLanguage,
+          arrivalLanguage: _arrivalLanguage,
+          userAllergies: _userAllergies,
+          userPreferences: _userPreferences,
+        ),
         lines: lines,
         rawText: rawText,
       ),
@@ -45,7 +84,13 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await AnalyzeMenuClient.analyzeMenu(widget.ocrResult.lines);
+      final response = await AnalyzeMenuClient.analyzeMenu(
+        widget.ocrResult.lines,
+        departureLanguage: _departureLanguage,
+        arrivalLanguage: _arrivalLanguage,
+        userAllergies: _userAllergies,
+        userPreferences: _userPreferences,
+      );
       if (!mounted) return;
       _showDebugBottomSheet(response: response);
     } on AnalyzeMenuException catch (e) {
@@ -66,7 +111,44 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _DebugBottomSheet(response: response),
+      builder: (_) => _DebugBottomSheet(
+        response: response,
+        onOpenOverlay: () => _openOverlay(response),
+      ),
+    );
+  }
+
+  void _openOverlay(AnalyzeMenuResponse response) {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => OverlayResultScreen(
+          imageBytes: widget.imageBytes,
+          displayImageWidth: widget.imageWidth,
+          displayImageHeight: widget.imageHeight,
+          ocrResult: widget.ocrResult,
+          response: response,
+        ),
+      ),
+    );
+  }
+
+  // TODO(overlay-dummy): 더미 테스트 완료 후 이 메서드 전체 제거
+  void _onDummyOverlayTap() {
+    if (widget.ocrResult.isEmpty) return;
+    final dummyResponse = AnalyzeMenuResponse.dummy(widget.ocrResult.lines);
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => OverlayResultScreen(
+          imageBytes: widget.imageBytes,
+          displayImageWidth: widget.imageWidth,
+          displayImageHeight: widget.imageHeight,
+          ocrResult: widget.ocrResult,
+          response: dummyResponse,
+          isDummy: true,
+        ),
+      ),
     );
   }
 
@@ -170,6 +252,8 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
               rawText: widget.ocrResult.fullText,
             ),
             onPasteTap: _showPasteTextDialog,
+            // TODO(overlay-dummy): 더미 테스트 완료 후 아래 파라미터 제거
+            onDummyOverlayTap: _onDummyOverlayTap,
           ),
         ],
       ),
@@ -178,9 +262,13 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
 }
 
 class _DebugBottomSheet extends StatefulWidget {
-  const _DebugBottomSheet({required this.response});
+  const _DebugBottomSheet({
+    required this.response,
+    required this.onOpenOverlay,
+  });
 
   final AnalyzeMenuResponse response;
+  final VoidCallback onOpenOverlay;
 
   @override
   State<_DebugBottomSheet> createState() => _DebugBottomSheetState();
@@ -193,7 +281,7 @@ class _DebugBottomSheetState extends State<_DebugBottomSheet>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -207,6 +295,26 @@ class _DebugBottomSheetState extends State<_DebugBottomSheet>
         '',
         widget.response.requestJson,
       ].join('\n');
+
+  String get _responseSummary {
+    try {
+      final decoded = jsonDecode(widget.response.rawResponseBody);
+      return const JsonEncoder.withIndent('  ').convert(decoded);
+    } catch (_) {
+      return widget.response.rawResponseBody;
+    }
+  }
+
+  Future<void> _copyResponseJson() async {
+    await Clipboard.setData(ClipboardData(text: _responseSummary));
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('응답 JSON을 클립보드에 복사했습니다.'),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -245,6 +353,18 @@ class _DebugBottomSheetState extends State<_DebugBottomSheet>
                       fontSize: 14,
                     ),
                   ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      widget.onOpenOverlay();
+                    },
+                    icon: const Icon(Icons.layers_outlined, size: 16),
+                    label: const Text('오버레이 보기'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF4CAF50),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -257,8 +377,9 @@ class _DebugBottomSheetState extends State<_DebugBottomSheet>
               labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               tabs: const [
                 Tab(text: '파싱된 결과'),
+                Tab(text: '추천 메뉴'),
                 Tab(text: '요청 JSON'),
-                Tab(text: '응답 Raw'),
+                Tab(text: '응답 JSON'),
               ],
             ),
             Expanded(
@@ -272,6 +393,15 @@ class _DebugBottomSheetState extends State<_DebugBottomSheet>
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (_, i) =>
                         _ParsedItemCard(item: widget.response.items[i]),
+                  ),
+                  ListView.separated(
+                    controller: scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: widget.response.recommendations.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (_, i) => _RecommendationCard(
+                      item: widget.response.recommendations[i],
+                    ),
                   ),
                   SingleChildScrollView(
                     controller: scrollController,
@@ -289,14 +419,32 @@ class _DebugBottomSheetState extends State<_DebugBottomSheet>
                   SingleChildScrollView(
                     controller: scrollController,
                     padding: const EdgeInsets.all(16),
-                    child: SelectableText(
-                      widget.response.rawResponseBody,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        color: Color(0xFF9CDCFE),
-                        height: 1.6,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _copyResponseJson,
+                            icon: const Icon(Icons.copy_rounded),
+                            label: const Text('응답 JSON 복사'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4CAF50),
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SelectableText(
+                          _responseSummary,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                            color: Color(0xFF9CDCFE),
+                            height: 1.6,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -550,6 +698,78 @@ class _ParsedItemCard extends StatelessWidget {
             value: item.normalizedText,
             color: const Color(0xFFDCDCAA),
           ),
+          if (item.dishId != null) ...[
+            const SizedBox(height: 4),
+            _DebugRow(
+              label: 'dish_id    ',
+              value: item.dishId.toString(),
+              color: const Color(0xFFB5CEA8),
+            ),
+          ],
+          const SizedBox(height: 4),
+          _DebugRow(
+            label: 'allergy    ',
+            value: item.allergyRisk.label,
+            color: switch (item.allergyRisk) {
+              AllergyRisk.danger  => const Color(0xFFEF5350),
+              AllergyRisk.caution => const Color(0xFFFFD54F),
+              AllergyRisk.safe    => const Color(0xFF81C784),
+              AllergyRisk.unknown => Colors.white38,
+            },
+          ),
+          if (item.detectedAllergens.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            _DebugRow(
+              label: 'allergens  ',
+              value: item.detectedAllergens.join(', '),
+              color: const Color(0xFFEF5350),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RecommendationCard extends StatelessWidget {
+  const _RecommendationCard({required this.item});
+
+  final RecommendedMenuItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2D2D2D),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF06292).withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              item.itemId,
+              style: const TextStyle(
+                color: Color(0xFFF06292),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _DebugRow(
+            label: 'korean_name',
+            value: item.koreanName,
+            color: const Color(0xFF9CDCFE),
+          ),
         ],
       ),
     );
@@ -793,6 +1013,8 @@ class _BottomAction extends StatelessWidget {
     required this.onAnalyzeTap,
     required this.onPreviewTap,
     required this.onPasteTap,
+    // TODO(overlay-dummy): 더미 테스트 완료 후 아래 파라미터 제거
+    required this.onDummyOverlayTap,
   });
 
   final OcrResult ocrResult;
@@ -800,6 +1022,8 @@ class _BottomAction extends StatelessWidget {
   final VoidCallback onAnalyzeTap;
   final VoidCallback onPreviewTap;
   final VoidCallback onPasteTap;
+  // TODO(overlay-dummy): 더미 테스트 완료 후 아래 필드 제거
+  final VoidCallback onDummyOverlayTap;
 
   @override
   Widget build(BuildContext context) {
@@ -856,6 +1080,29 @@ class _BottomAction extends StatelessWidget {
                 ),
               ),
             ),
+            const SizedBox(height: 10),
+            // TODO(overlay-dummy): 더미 테스트 완료 후 아래 버튼 전체 제거 ──────────
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed:
+                    (ocrResult.isEmpty || isLoading) ? null : onDummyOverlayTap,
+                icon: const Icon(Icons.layers_outlined, size: 18),
+                label: const Text(
+                  '오버레이 UI 테스트 (더미)',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.orange,
+                  side: const BorderSide(color: Colors.orange),
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+            // ────────────────────────────────────────────────────────────────────
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,

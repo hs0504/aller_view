@@ -6,7 +6,6 @@ import '../home/main_home_screen.dart';
 class PreferenceSelectionScreen extends StatefulWidget {
   const PreferenceSelectionScreen({super.key, this.isEditMode = false});
 
-  /// true: 홈에서 편집 목적으로 진입, false: 최초 온보딩
   final bool isEditMode;
 
   @override
@@ -19,21 +18,46 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
     '맛 선호': [
       {'name': '매운맛', 'icon': '🌶'},
       {'name': '짠맛', 'icon': '🧂'},
-      {'name': '단맛', 'icon': '🍯'},
+      {'name': '단맛', 'icon': '🍬'},
     ],
     '식단 성향': [
-      {'name': '육식', 'icon': '🥩'},
+      {'name': '육식', 'icon': '🍖'},
       {'name': '해산물', 'icon': '🦐'},
       {'name': '채식', 'icon': '🥗'},
     ],
   };
 
-  // 기본값 0: 아무것도 선택하지 않은 상태
   Map<String, int> selectedScores = {};
-
   double _opacity = 0;
   double _offsetY = 30;
   bool _isLoading = true;
+
+  List<String> get _requiredPreferenceKeys => preferenceSections.values
+      .expand((items) => items.map((item) => item['name']!))
+      .toList(growable: false);
+
+  bool _isValidScore(int? score) => score != null && score >= 1 && score <= 5;
+
+  Map<String, int> _filterSavedScores(Map<String, int> scores) {
+    final filtered = <String, int>{};
+    for (final key in _requiredPreferenceKeys) {
+      final score = scores[key];
+      if (_isValidScore(score)) {
+        filtered[key] = score!;
+      }
+    }
+    return filtered;
+  }
+
+  Map<String, int> get _normalizedScores => _filterSavedScores(selectedScores);
+
+  int get _completedCount => _requiredPreferenceKeys
+      .where((key) => _isValidScore(selectedScores[key]))
+      .length;
+
+  int get _remainingCount => _requiredPreferenceKeys.length - _completedCount;
+
+  bool get _isSelectionComplete => _remainingCount == 0;
 
   @override
   void initState() {
@@ -43,12 +67,16 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
 
   Future<void> _loadSavedData() async {
     final saved = await UserPrefs.loadPreferenceScores();
+    if (!mounted) return;
+
     setState(() {
-      selectedScores = saved;
+      selectedScores = _filterSavedScores(saved);
       _isLoading = false;
     });
 
     await Future.delayed(const Duration(milliseconds: 100));
+    if (!mounted) return;
+
     setState(() {
       _opacity = 1;
       _offsetY = 0;
@@ -56,7 +84,19 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
   }
 
   Future<void> _onComplete() async {
-    await UserPrefs.savePreferenceScores(selectedScores);
+    if (!_isSelectionComplete) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            '모든 식성 항목에 1점부터 5점까지 점수를 선택해 주세요. 남은 항목 $_remainingCount개',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await UserPrefs.savePreferenceScores(_normalizedScores);
 
     if (!mounted) return;
 
@@ -65,7 +105,6 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
       return;
     }
 
-    // 최초 온보딩 완료: 설정 저장 후 홈으로
     await UserPrefs.markSetupComplete();
     if (!mounted) return;
 
@@ -87,6 +126,8 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final totalCount = _requiredPreferenceKeys.length;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFFF5F7),
       appBar: AppBar(
@@ -115,13 +156,27 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
                 child: Column(
                   children: [
                     if (!widget.isEditMode)
-                      _StepIndicator(current: 2, total: 2),
+                      const _StepIndicator(current: 2, total: 2),
                     const Padding(
                       padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
                       child: Text(
-                        '선호하는 음식 성향을 선택해주세요.\n선택된 정보를 바탕으로 맞춤형 메뉴를 추천해드립니다.',
+                        '각 식성 항목을 1점부터 5점까지 선택해 주세요.\n선택한 점수는 나중에 맞춤 메뉴 추천에 활용돼요.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 14, color: Colors.black54, height: 1.5),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.black54,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _SelectionStatusCard(
+                        completedCount: _completedCount,
+                        totalCount: totalCount,
+                        remainingCount: _remainingCount,
+                        isComplete: _isSelectionComplete,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -146,9 +201,11 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
                               ),
                               ...section.value.map((item) {
                                 final key = item['name']!;
-                                final score = selectedScores[key] ?? 0;
+                                final score = selectedScores[key];
+                                final hasScore = _isValidScore(score);
 
-                                return Container(
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
                                   margin: const EdgeInsets.only(bottom: 10),
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 14,
@@ -157,6 +214,12 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: hasScore
+                                          ? const Color(0xFFF8BBD0)
+                                          : const Color(0xFFF06292),
+                                      width: hasScore ? 1 : 1.4,
+                                    ),
                                     boxShadow: [
                                       BoxShadow(
                                         color: Colors.black
@@ -166,63 +229,152 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
                                       ),
                                     ],
                                   ),
-                                  child: Row(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        item['icon']!,
-                                        style:
-                                            const TextStyle(fontSize: 22),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          key,
-                                          style: const TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                      // 별점: 미선택은 star_border, 터치 영역 44px 확보
                                       Row(
-                                        children: List.generate(5, (index) {
-                                          final starIndex = index + 1;
-                                          final isActive = starIndex <= score;
-                                          return GestureDetector(
-                                            onTap: () {
-                                              setState(() {
-                                                // 같은 별 다시 누르면 해제
-                                                selectedScores[key] =
-                                                    score == starIndex
-                                                        ? 0
-                                                        : starIndex;
-                                              });
-                                            },
-                                            child: SizedBox(
-                                              width: 36,
-                                              height: 44,
-                                              child: Center(
-                                                child: AnimatedScale(
-                                                  scale: isActive ? 1.15 : 1.0,
-                                                  duration: const Duration(
-                                                    milliseconds: 150,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item['icon']!,
+                                            style:
+                                                const TextStyle(fontSize: 22),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  key,
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontWeight: FontWeight.w600,
                                                   ),
-                                                  child: Icon(
-                                                    isActive
-                                                        ? Icons.star
-                                                        : Icons.star_border,
-                                                    size: 24,
-                                                    color: isActive
-                                                        ? const Color(
-                                                            0xFFF06292,
-                                                          )
-                                                        : Colors.grey.shade300,
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  hasScore
+                                                      ? '현재 선택: ${score!}점'
+                                                      : '필수 항목이에요. 1점부터 5점까지 선택해 주세요',
+                                                  style: TextStyle(
+                                                    fontSize: 12.5,
+                                                    height: 1.35,
+                                                    color: hasScore
+                                                        ? Colors.grey.shade600
+                                                        : const Color(
+                                                            0xFFD81B60,
+                                                          ),
+                                                    fontWeight: hasScore
+                                                        ? FontWeight.w500
+                                                        : FontWeight.w600,
                                                   ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          if (!hasScore)
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 5,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(
+                                                  0xFFFFE4EC,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
+                                              ),
+                                              child: const Text(
+                                                '필수',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Color(0xFFD81B60),
                                                 ),
                                               ),
                                             ),
-                                          );
-                                        }),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
+                                          Text(
+                                            '낮음',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade500,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: List.generate(5, (
+                                                index,
+                                              ) {
+                                                final starIndex = index + 1;
+                                                final isActive =
+                                                    starIndex <= (score ?? 0);
+
+                                                return GestureDetector(
+                                                  onTap: () {
+                                                    setState(() {
+                                                      selectedScores[key] =
+                                                          starIndex;
+                                                    });
+                                                  },
+                                                  child: SizedBox(
+                                                    width: 36,
+                                                    height: 44,
+                                                    child: Center(
+                                                      child: AnimatedScale(
+                                                        scale: isActive
+                                                            ? 1.15
+                                                            : 1.0,
+                                                        duration:
+                                                            const Duration(
+                                                              milliseconds:
+                                                                  150,
+                                                            ),
+                                                        child: Icon(
+                                                          isActive
+                                                              ? Icons.star
+                                                              : Icons
+                                                                  .star_border,
+                                                          size: 24,
+                                                          color: isActive
+                                                              ? const Color(
+                                                                  0xFFF06292,
+                                                                )
+                                                              : Colors
+                                                                  .grey
+                                                                  .shade300,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              }),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '높음',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade500,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -240,16 +392,20 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: _onComplete,
+                          onPressed: _isSelectionComplete ? _onComplete : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFF06292),
+                            disabledBackgroundColor: Colors.grey[300],
                             foregroundColor: Colors.white,
+                            disabledForegroundColor: Colors.white70,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
                           ),
                           child: Text(
-                            widget.isEditMode ? '수정 완료' : '설정 완료',
+                            _isSelectionComplete
+                                ? (widget.isEditMode ? '수정 완료' : '설정 완료')
+                                : '남은 항목 $_remainingCount개 선택해 주세요',
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -263,6 +419,100 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _SelectionStatusCard extends StatelessWidget {
+  const _SelectionStatusCard({
+    required this.completedCount,
+    required this.totalCount,
+    required this.remainingCount,
+    required this.isComplete,
+  });
+
+  final int completedCount;
+  final int totalCount;
+  final int remainingCount;
+  final bool isComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    final accentColor = isComplete
+        ? const Color(0xFFF06292)
+        : const Color(0xFFD81B60);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: isComplete ? const Color(0xFFFFE4EC) : const Color(0xFFFFF1F4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isComplete
+              ? const Color(0xFFF8BBD0)
+              : const Color(0xFFF48FB1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              isComplete ? Icons.check_circle : Icons.info_outline,
+              color: accentColor,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isComplete ? '모든 식성 항목 선택 완료' : '아직 선택하지 않은 항목이 있어요',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: accentColor,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  isComplete
+                      ? '각 항목의 점수가 저장될 준비가 완료됐어요.'
+                      : '남은 $remainingCount개 항목에 1점부터 5점까지 점수를 선택해 주세요.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$completedCount/$totalCount',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: accentColor,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

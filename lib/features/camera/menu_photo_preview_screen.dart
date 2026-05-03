@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/ocr/ocr_result.dart';
 import '../../core/ocr/vision_api_client.dart';
+import 'menu_image_normalizer.dart';
 import 'ocr_result_screen.dart';
 import 'photo_quality_analyzer.dart';
 
@@ -28,13 +29,23 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
   }
 
   Future<_PreviewData> _loadPreviewData() async {
-    final bytes = await widget.photo.readAsBytes();
-    final quality = PhotoQualityAnalyzer.analyze(bytes);
+    final sourceBytes = await widget.photo.readAsBytes();
+    final normalized = MenuImageNormalizer.normalize(sourceBytes);
+    final quality = PhotoQualityAnalyzer.analyze(normalized.bytes);
 
-    return _PreviewData(bytes: bytes, quality: quality);
+    return _PreviewData(
+      bytes: normalized.bytes,
+      quality: quality,
+      imageWidth: normalized.width,
+      imageHeight: normalized.height,
+    );
   }
 
-  Future<void> _startOcr(Uint8List imageBytes) async {
+  Future<void> _startOcr(
+    Uint8List imageBytes, {
+    required double imageWidth,
+    required double imageHeight,
+  }) async {
     setState(() => _isAnalyzing = true);
 
     try {
@@ -47,6 +58,8 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
         MaterialPageRoute(
           builder: (_) => OcrResultScreen(
             imageBytes: imageBytes,
+            imageWidth: imageWidth,
+            imageHeight: imageHeight,
             ocrResult: result,
           ),
         ),
@@ -124,7 +137,11 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
                       child: ElevatedButton(
                         onPressed: quality.isTooBlurry || _isAnalyzing
                             ? null
-                            : () => _startOcr(preview.bytes),
+                            : () => _startOcr(
+                                preview.bytes,
+                                imageWidth: preview.imageWidth,
+                                imageHeight: preview.imageHeight,
+                              ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFF06292),
                           disabledBackgroundColor: Colors.white24,
@@ -225,8 +242,15 @@ class _QualityBanner extends StatelessWidget {
 }
 
 class _PreviewData {
-  const _PreviewData({required this.bytes, required this.quality});
+  const _PreviewData({
+    required this.bytes,
+    required this.quality,
+    required this.imageWidth,
+    required this.imageHeight,
+  });
 
   final Uint8List bytes;
   final PhotoQualityResult quality;
+  final double imageWidth;
+  final double imageHeight;
 }

@@ -3,11 +3,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/data/allergy_data.dart';
+import '../../core/data/language_data.dart';
 import '../../core/storage/user_prefs.dart';
 import '../camera/menu_camera_screen.dart';
 import '../location/location_screen.dart';
 import '../onboarding/allergy_selection_screen.dart';
 import '../onboarding/preference_selection_screen.dart';
+import '../settings/language_setting_screen.dart';
 
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({super.key});
@@ -18,19 +20,30 @@ class MainHomeScreen extends StatefulWidget {
 
 class _MainHomeScreenState extends State<MainHomeScreen> {
   List<int> _allergyIndices = [];
+  String _departureLanguage = 'ja';
+  String _arrivalLanguage = 'ko';
 
   @override
   void initState() {
     super.initState();
     _loadAllergyData();
+    _loadLanguageSettings();
   }
 
   Future<void> _loadAllergyData() async {
     final indices = await UserPrefs.loadAllergyIndices();
+    if (!mounted) return;
     setState(() {
-      _allergyIndices = indices
-          .where((i) => i < allergyItems.length)
-          .toList();
+      _allergyIndices = indices.where((i) => i < allergyItems.length).toList();
+    });
+  }
+
+  Future<void> _loadLanguageSettings() async {
+    final settings = await UserPrefs.loadLanguageSettings();
+    if (!mounted) return;
+    setState(() {
+      _departureLanguage = settings.departure;
+      _arrivalLanguage = settings.arrival;
     });
   }
 
@@ -138,7 +151,20 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               const SizedBox(height: 20),
               _SectionHeader(title: '메뉴판 분석'),
               const SizedBox(height: 10),
-              _CameraCard(onTap: _handleCameraCardPressed),
+              _CameraCard(
+                onCameraTap: _handleCameraCardPressed,
+                onLanguageTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const LanguageSettingScreen(),
+                    ),
+                  );
+                  _loadLanguageSettings();
+                },
+                departureCode: _departureLanguage,
+                arrivalCode: _arrivalLanguage,
+              ),
               const SizedBox(height: 24),
               _SectionHeader(title: '빠른 메뉴'),
               const SizedBox(height: 14),
@@ -196,7 +222,15 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                     icon: Icons.translate_outlined,
                     title: '언어 설정',
                     desc: '번역 언어 변경',
-                    onTap: () {},
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const LanguageSettingScreen(),
+                        ),
+                      );
+                      _loadLanguageSettings();
+                    },
                   ),
                 ],
               ),
@@ -484,128 +518,201 @@ class _AllergyBottomSheet extends StatelessWidget {
 }
 
 class _CameraCard extends StatelessWidget {
-  const _CameraCard({required this.onTap});
+  const _CameraCard({
+    required this.onCameraTap,
+    required this.onLanguageTap,
+    required this.departureCode,
+    required this.arrivalCode,
+  });
 
-  final VoidCallback onTap;
+  final VoidCallback onCameraTap;
+  final VoidCallback onLanguageTap;
+  final String departureCode;
+  final String arrivalCode;
+
+  LanguageOption _find(List<LanguageOption> list, String code) =>
+      list.firstWhere((l) => l.code == code, orElse: () => list.first);
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        height: 130,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFF06292), Color(0xFFFF7043)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFF06292).withValues(alpha: 0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
+    final dep = _find(departureLanguageOptions, departureCode);
+    final arr = _find(arrivalLanguageOptions, arrivalCode);
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF06292), Color(0xFFFF7043)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        child: Stack(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFF06292).withValues(alpha: 0.35),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
           children: [
-            // Decorative background circles
-            Positioned(
-              right: -20,
-              top: -20,
-              child: Container(
-                width: 110,
-                height: 110,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-            Positioned(
-              right: 30,
-              bottom: -30,
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-            // Content
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
-              child: Row(
+            // ── 스캔 영역 ──
+            GestureDetector(
+              onTap: onCameraTap,
+              child: Stack(
                 children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Icons.document_scanner_outlined,
-                      color: Colors.white,
-                      size: 28,
+                  Positioned(
+                    right: -20, top: -20,
+                    child: Container(
+                      width: 100, height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  Positioned(
+                    right: 25, bottom: -25,
+                    child: Container(
+                      width: 70, height: 70,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.06),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                    child: Row(
                       children: [
-                        const Text(
-                          '메뉴판 스캔하기',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          'AI가 알레르기 성분을 자동으로 분석해요',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.80),
-                            fontSize: 12.5,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
+                          width: 50, height: 50,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.22),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                          child: const Text(
-                            '탭하여 시작',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          child: const Icon(
+                            Icons.document_scanner_outlined,
+                            color: Colors.white,
+                            size: 24,
                           ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                '메뉴판 스캔하기',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'AI가 알레르기 성분을 자동으로 분석해요',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.80),
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.22),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Text(
+                                  '탭하여 시작',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          color: Colors.white70,
+                          size: 16,
                         ),
                       ],
                     ),
                   ),
-                  const Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    color: Colors.white70,
-                    size: 16,
-                  ),
                 ],
+              ),
+            ),
+            // ── 구분선 ──
+            Container(
+              height: 1,
+              color: Colors.white.withValues(alpha: 0.20),
+            ),
+            // ── 언어 설정 행 ──
+            GestureDetector(
+              onTap: onLanguageTap,
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.12),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                child: Row(
+                  children: [
+                    Text(dep.flag, style: const TextStyle(fontSize: 19)),
+                    const SizedBox(width: 6),
+                    Text(
+                      dep.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Icon(
+                        Icons.arrow_forward_rounded,
+                        color: Colors.white.withValues(alpha: 0.60),
+                        size: 14,
+                      ),
+                    ),
+                    Text(arr.flag, style: const TextStyle(fontSize: 19)),
+                    const SizedBox(width: 6),
+                    Text(
+                      arr.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      Icons.edit_outlined,
+                      color: Colors.white.withValues(alpha: 0.65),
+                      size: 13,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '변경',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.65),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
