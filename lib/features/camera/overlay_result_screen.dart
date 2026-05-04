@@ -23,6 +23,16 @@ IconData _allergyIcon(AllergyRisk risk) => switch (risk) {
       AllergyRisk.unknown => Icons.help_outline_rounded,
     };
 
+const double _overlayBadgeRowHeight = 24.0;
+const double _overlayBadgeHeight = 20.0;
+const double _overlayBadgeHorizontalPadding = 8.0;
+const double _overlayBadgeIconSize = 11.0;
+const double _overlayBadgeIconGap = 3.0;
+const double _overlayBadgeFontSize = 10.0;
+const double _overlayBadgeSpacing = 4.0;
+const double _overlayTextRightSafetyPadding = 6.0;
+const double _overlayTextWidthSafetyBuffer = 2.0;
+
 class OverlayDebugInfo {
   const OverlayDebugInfo({
     required this.requestUrl,
@@ -133,7 +143,6 @@ class OverlayResultScreen extends StatelessWidget {
               isDummy: isDummy,
             ),
           ),
-          _BottomSummaryPanel(response: response),
         ],
       ),
     );
@@ -270,6 +279,7 @@ class _OverlayImageView extends StatelessWidget {
                       item: itemMap[block.itemId],
                       isRecommended: recommendedItemIds.contains(block.itemId),
                       isDummy: isDummy,
+                      canvasWidth: canvasWidth,
                       scaleX: scaleX,
                       scaleY: scaleY,
                     ),
@@ -288,6 +298,7 @@ class _OverlayBox extends StatelessWidget {
     required this.item,
     required this.isRecommended,
     required this.isDummy,
+    required this.canvasWidth,
     required this.scaleX,
     required this.scaleY,
   });
@@ -296,10 +307,82 @@ class _OverlayBox extends StatelessWidget {
   final AnalyzedMenuItem? item;
   final bool isRecommended;
   final bool isDummy;
+  final double canvasWidth;
   final double scaleX;
   final double scaleY;
 
   AllergyRisk get _risk => item?.allergyRisk ?? AllergyRisk.unknown;
+
+  TextPainter _measureText(
+    String text,
+    TextStyle style,
+    TextDirection textDirection, {
+    double maxWidth = double.infinity,
+    int maxLines = 1,
+  }) {
+    return TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: textDirection,
+      textScaler: TextScaler.noScaling,
+      maxLines: maxLines,
+    )..layout(maxWidth: maxWidth);
+  }
+
+  double _measureBadgeWidth(String label, TextDirection textDirection) {
+    final badgePainter = _measureText(
+      label,
+      GoogleFonts.blackHanSans(
+        fontSize: _overlayBadgeFontSize,
+        height: 1.0,
+      ),
+      textDirection,
+    );
+
+    return _overlayBadgeHorizontalPadding * 2 +
+        _overlayBadgeIconSize +
+        _overlayBadgeIconGap +
+        badgePainter.width;
+  }
+
+  double _fitFontSize(
+    String text,
+    TextDirection textDirection, {
+    required double maxWidth,
+    required double maxHeight,
+    required int maxLines,
+  }) {
+    var low = 12.0;
+    var high = 28.0;
+    var best = 12.0;
+
+    while (high - low > 0.25) {
+      final mid = (low + high) / 2;
+      final painter = _measureText(
+        text,
+        GoogleFonts.blackHanSans(
+          color: Colors.white,
+          fontSize: mid,
+          height: 1.1,
+        ),
+        textDirection,
+        maxWidth: maxWidth,
+        maxLines: maxLines,
+      );
+      final fits =
+          !painter.didExceedMaxLines &&
+          painter.width <= maxWidth + 0.1 &&
+          painter.height <= maxHeight + 0.1;
+
+      if (fits) {
+        best = mid;
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+
+    return best;
+  }
 
   void _showDetail(BuildContext context) {
     if (item == null) return;
@@ -315,88 +398,185 @@ class _OverlayBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textDirection = Directionality.of(context);
     final box = block.boundingBox;
-    final left = box.left * scaleX;
+    final originalLeft = box.left * scaleX;
     final top = box.top * scaleY;
-    final width = math.max(box.width * scaleX, 44.0);
-    final height = math.max(box.height * scaleY, 22.0);
+    final originalWidth = math.max(box.width * scaleX, 44.0);
+    final originalHeight = math.max(box.height * scaleY, 24.0);
     final label = item?.translatedText ?? block.rawText;
     final color = _allergyColor(_risk);
     const recommendedColor = Color(0xFFFFC107);
-    final fontSize = (height * 0.48).clamp(11.0, 36.0);
-    final badgeMaxWidth = math.min(math.max(width, 128.0), 184.0);
+    final isUnknown = _risk == AllergyRisk.unknown;
+    const badgeRowHeight = _overlayBadgeRowHeight;
+    final horizontalPadding = originalWidth < 64 ? 4.0 : 6.0;
+    final rightTextPadding = horizontalPadding + _overlayTextRightSafetyPadding;
+    final verticalPadding = originalHeight < 32 ? 3.0 : 4.0;
+    final badgeWidth = isUnknown
+        ? 0.0
+        : _measureBadgeWidth(_risk.label, textDirection) +
+            (isRecommended
+                ? _overlayBadgeSpacing +
+                    _measureBadgeWidth('추천 메뉴', textDirection)
+                : 0.0);
+    final probeTextStyle = GoogleFonts.blackHanSans(
+      color: Colors.white,
+      fontSize: (originalHeight * 0.72).clamp(12.0, 24.0).toDouble(),
+      height: 1.1,
+    );
+    final singleLinePainter = _measureText(
+      label,
+      probeTextStyle,
+      textDirection,
+    );
+    final desiredWidth = math.max(
+      math.max(
+        originalWidth,
+        singleLinePainter.width +
+            horizontalPadding +
+            rightTextPadding +
+            _overlayTextWidthSafetyBuffer,
+      ),
+      badgeWidth,
+    );
+    final overlayWidth = math.min(desiredWidth, canvasWidth);
+    final overlayLeft = originalLeft
+        .clamp(0.0, math.max(0.0, canvasWidth - overlayWidth))
+        .toDouble();
+    final wrapsToTwoLines = desiredWidth > canvasWidth;
+    final availableTextWidth = math.max(
+      1.0,
+      overlayWidth - horizontalPadding - rightTextPadding,
+    );
+    final wrappedPainter = wrapsToTwoLines
+        ? _measureText(
+            label,
+            probeTextStyle,
+            textDirection,
+            maxWidth: availableTextWidth,
+            maxLines: 2,
+          )
+        : null;
+    final overlayHeight = wrapsToTwoLines
+        ? math.max(
+            originalHeight,
+            wrappedPainter!.height + verticalPadding * 2,
+          )
+        : originalHeight;
+    final widthExpansion = math.max(0.0, overlayWidth - originalWidth);
+    final textHeightBudget = math.max(
+      1.0,
+      overlayHeight -
+          verticalPadding * 2 +
+          (wrapsToTwoLines ? 0.0 : math.min(8.0, widthExpansion * 0.12)),
+    );
+    final fittedFontSize = _fitFontSize(
+      label,
+      textDirection,
+      maxWidth: availableTextWidth,
+      maxHeight: textHeightBudget,
+      maxLines: wrapsToTwoLines ? 2 : 1,
+    );
+    final textStyle = GoogleFonts.blackHanSans(
+      color: Colors.white,
+      fontSize: fittedFontSize,
+      height: 1.1,
+    );
+    final finalTextPainter = _measureText(
+      label,
+      textStyle,
+      textDirection,
+      maxWidth: availableTextWidth,
+      maxLines: wrapsToTwoLines ? 2 : 1,
+    );
+    final resolvedOverlayHeight = math.max(
+      overlayHeight,
+      finalTextPainter.height + verticalPadding * 2 + 2.0,
+    );
 
     return Positioned(
-      left: left,
-      top: top,
-      width: width,
-      height: height,
+      left: overlayLeft,
+      top: isUnknown ? top : top - badgeRowHeight,
+      width: overlayWidth,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(5),
           onTap: () => _showDetail(context),
-          child: Stack(
-            clipBehavior: Clip.none,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: width,
-                height: height,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                alignment: Alignment.centerLeft,
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.80),
-                  borderRadius: BorderRadius.circular(5),
-                  border: Border.all(color: color, width: 2.0),
-                  boxShadow: isRecommended
-                      ? [
-                          BoxShadow(
-                            color: recommendedColor.withValues(alpha: 0.45),
-                            blurRadius: 16,
-                            spreadRadius: 2,
+              if (!isUnknown)
+                SizedBox(
+                  height: badgeRowHeight,
+                  child: Align(
+                    alignment: Alignment.bottomLeft,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.bottomLeft,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          _InfoBadge(
+                            backgroundColor: color,
+                            foregroundColor: Colors.white,
+                            icon: _allergyIcon(_risk),
+                            label: _risk.label,
                           ),
-                        ]
-                      : null,
-                ),
-                child: Text(
-                  label,
-                  style: GoogleFonts.blackHanSans(
-                    color: Colors.white,
-                    fontSize: fontSize,
-                    height: 1.0,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  softWrap: false,
-                ),
-              ),
-              Positioned(
-                top: isRecommended ? -40 : -16,
-                left: 6,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: badgeMaxWidth),
-                  child: Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: [
-                      _InfoBadge(
-                        backgroundColor: color,
-                        foregroundColor: Colors.white,
-                        icon: _allergyIcon(_risk),
-                        label: _risk.label,
+                          if (isRecommended) ...[
+                            const SizedBox(width: _overlayBadgeSpacing),
+                            _InfoBadge(
+                              backgroundColor: const Color(0xFFFFD54F),
+                              foregroundColor: Colors.black,
+                              icon: Icons.star_rounded,
+                              label: '추천 메뉴',
+                              shadowColor: recommendedColor.withValues(alpha: 0.35),
+                            ),
+                          ],
+                        ],
                       ),
-                      if (isRecommended)
-                        _InfoBadge(
-                          backgroundColor: const Color(0xFFFFD54F),
-                          foregroundColor: Colors.black,
-                          icon: Icons.star_rounded,
-                          label: '추천 메뉴',
-                          shadowColor: recommendedColor.withValues(alpha: 0.35),
-                        ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                Container(
+                  width: overlayWidth,
+                  height: resolvedOverlayHeight,
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    verticalPadding,
+                    rightTextPadding,
+                    verticalPadding,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.80),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(
+                      color: isUnknown ? Colors.white24 : color,
+                      width: 2.0,
+                    ),
+                    boxShadow: isRecommended
+                        ? [
+                            BoxShadow(
+                              color: recommendedColor.withValues(alpha: 0.45),
+                              blurRadius: 16,
+                              spreadRadius: 2,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      label,
+                      maxLines: wrapsToTwoLines ? 2 : 1,
+                      softWrap: wrapsToTwoLines,
+                      overflow: TextOverflow.visible,
+                      textScaler: TextScaler.noScaling,
+                      style: textStyle,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -436,22 +616,29 @@ class _InfoBadge extends StatelessWidget {
                 ),
               ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: foregroundColor, size: 11),
-            const SizedBox(width: 3),
-            Text(
-              label,
-              style: GoogleFonts.blackHanSans(
-                color: foregroundColor,
-                fontSize: 10,
-                height: 1.0,
+      child: SizedBox(
+        height: _overlayBadgeHeight,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: _overlayBadgeHorizontalPadding),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: _overlayBadgeIconSize,
+                height: _overlayBadgeIconSize,
+                child: Icon(icon, color: foregroundColor, size: _overlayBadgeIconSize),
               ),
-            ),
-          ],
+              const SizedBox(width: _overlayBadgeIconGap),
+              Text(
+                label,
+                style: GoogleFonts.blackHanSans(
+                  color: foregroundColor,
+                  fontSize: _overlayBadgeFontSize,
+                  height: 1.0,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -527,12 +714,17 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
     if (detail != null && detail.hasImage) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          detail.imageUrl!,
+        child: Container(
           width: double.infinity,
           height: 160,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildImagePlaceholder('이미지를 불러오지 못했습니다.'),
+          color: const Color(0xFF2C2C2E),
+          child: Image.network(
+            detail.imageUrl!,
+            width: double.infinity,
+            height: 160,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => _buildImagePlaceholder('이미지를 불러오지 못했습니다.'),
+          ),
         ),
       );
     }
@@ -617,13 +809,6 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
                     _item.originalText,
                     style: const TextStyle(color: Colors.white38, fontSize: 14),
                   ),
-                  if (_item.dishId != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Dish ID ${_item.dishId}',
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
-                    ),
-                  ],
                   const SizedBox(height: 16),
                   Container(
                     width: double.infinity,
@@ -847,13 +1032,6 @@ class LegacyMenuDetailSheet extends StatelessWidget {
                 item.originalText,
                 style: const TextStyle(color: Colors.white38, fontSize: 14),
               ),
-              if (item.dishId != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Dish ID ${item.dishId}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-              ],
               const SizedBox(height: 12),
               Row(
                 children: const [
@@ -915,103 +1093,6 @@ class LegacyMenuDetailSheet extends StatelessWidget {
   }
 }
 
-class _BottomSummaryPanel extends StatelessWidget {
-  const _BottomSummaryPanel({required this.response});
-
-  final AnalyzeMenuResponse response;
-
-  List<AnalyzedMenuItem> get _menuItems => response.items
-      .where((item) => item.translatedText.trim().isNotEmpty)
-      .toList();
-
-  Map<AllergyRisk, int> _countByRisk() {
-    final counts = <AllergyRisk, int>{};
-    for (final item in _menuItems) {
-      counts[item.allergyRisk] = (counts[item.allergyRisk] ?? 0) + 1;
-    }
-    return counts;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final counts = _countByRisk();
-    final recommendationCount = response.recommendations.length;
-
-    return Container(
-      color: const Color(0xFF1A1A1A),
-      padding: EdgeInsets.fromLTRB(
-        16,
-        12,
-        16,
-        12 + MediaQuery.of(context).padding.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '총 ${_menuItems.length}개 항목 분석',
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
-          ),
-          if (recommendationCount > 0) ...[
-            const SizedBox(height: 4),
-            Text(
-              '추천 메뉴 $recommendationCount개',
-              style: const TextStyle(color: Colors.white38, fontSize: 12),
-            ),
-          ],
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              for (final risk in AllergyRisk.values)
-                if ((counts[risk] ?? 0) > 0)
-                  _RiskChip(risk: risk, count: counts[risk]!),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RiskChip extends StatelessWidget {
-  const _RiskChip({required this.risk, required this.count});
-
-  final AllergyRisk risk;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _allergyColor(risk);
-    final icon = _allergyIcon(risk);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color, width: 1.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 13),
-          const SizedBox(width: 5),
-          Text(
-            '${risk.label}  $count개',
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _OverlayDebugSheet extends StatelessWidget {
   const _OverlayDebugSheet({required this.debugInfo});

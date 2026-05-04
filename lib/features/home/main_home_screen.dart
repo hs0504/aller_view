@@ -97,6 +97,9 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final quickMenuAspectRatio =
+        MediaQuery.sizeOf(context).width < 380 ? 1.0 : 1.2;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFFF5F7),
       appBar: AppBar(
@@ -174,7 +177,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                childAspectRatio: 1.2,
+                childAspectRatio: quickMenuAspectRatio,
                 children: [
                   _QuickMenuCard(
                     icon: Icons.medical_information_outlined,
@@ -465,11 +468,15 @@ class _AllergyBottomSheet extends StatelessWidget {
                               style: const TextStyle(fontSize: 20),
                             ),
                             const SizedBox(width: 10),
-                            Text(
-                              allergyItems[i]['name']!,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
+                            Expanded(
+                              child: Text(
+                                allergyItems[i]['name']!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ],
@@ -560,7 +567,7 @@ class _CameraCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: Column(
           children: [
-            // ???? ????嶺뚮ㅎ?????????ㅻ쑄??????
+            // Camera CTA area
             GestureDetector(
               onTap: onCameraTap,
               child: Stack(
@@ -666,13 +673,17 @@ class _CameraCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                 child: Row(
                   children: [
-                    Text(
-                      '${_findOption(departureLanguageOptions, departureCode).flag} '
-                      '${_findOption(departureLanguageOptions, departureCode).name}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                    Flexible(
+                      child: Text(
+                        '${_findOption(departureLanguageOptions, departureCode).flag} '
+                        '${_findOption(departureLanguageOptions, departureCode).name}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -682,7 +693,7 @@ class _CameraCard extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.82),
                     ),
                     const SizedBox(width: 10),
-                    Expanded(
+                    Flexible(
                       child: Text(
                         '${_findOption(arrivalLanguageOptions, arrivalCode).flag} '
                         '${_findOption(arrivalLanguageOptions, arrivalCode).name}',
@@ -691,6 +702,7 @@ class _CameraCard extends StatelessWidget {
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -761,18 +773,30 @@ class _QuickMenuCard extends StatelessWidget {
               ),
               child: Icon(icon, color: const Color(0xFFF06292)),
             ),
-            const Spacer(),
-            Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
+            const SizedBox(height: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    desc,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              desc,
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ],
         ),

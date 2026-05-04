@@ -30,6 +30,7 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
   static const _minimumStepOneDuration = Duration(milliseconds: 850);
   static const _minimumStepTwoDuration = Duration(milliseconds: 1200);
   static const _minimumStepThreeDuration = Duration(milliseconds: 800);
+  static const _analysisTimeout = Duration(seconds: 30);
 
   String? _errorMessage;
   int _currentStep = 1;
@@ -59,14 +60,6 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
       final userPreferences = UserPrefs.preferenceScoresToEn(preferenceScores);
       final lines = widget.ocrResult.lines;
 
-      final requestJson = AnalyzeMenuClient.buildPrettyRequestJson(
-        lines,
-        departureLanguage: settings.departure,
-        arrivalLanguage: settings.arrival,
-        userAllergies: userAllergies,
-        userPreferences: userPreferences,
-      );
-
       await _waitForMinimum(stepOneStartedAt, _minimumStepOneDuration);
       if (!mounted) return;
       setState(() {
@@ -75,9 +68,7 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
       });
       final stepTwoStartedAt = DateTime.now();
 
-      AnalyzeMenuResponse response;
-      OverlayDebugInfo? debugInfo;
-      var isDummy = false;
+      final AnalyzeMenuResponse response;
 
       try {
         response = await AnalyzeMenuClient.analyzeMenu(
@@ -86,16 +77,18 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
           arrivalLanguage: settings.arrival,
           userAllergies: userAllergies,
           userPreferences: userPreferences,
+        ).timeout(
+          _analysisTimeout,
+          onTimeout: () => throw const AnalyzeMenuException(
+            '\ubd84\uc11d \uc694\uccad\uc774 30\ucd08 \uc548\uc5d0 \uc644\ub8cc\ub418\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4. \uba54\uc778 \ud654\uba74\uc73c\ub85c \ub3cc\uc544\uac00 \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.',
+          ),
         );
       } catch (error) {
-        isDummy = true;
-        response = AnalyzeMenuResponse.dummy(lines);
-        debugInfo = OverlayDebugInfo(
-          requestUrl: AnalyzeMenuClient.requestUrl,
-          requestJson: requestJson,
-          ocrLines: lines,
-          failureMessage: _errorMessageFrom(error),
-        );
+        if (!mounted) return;
+        setState(() {
+          _errorMessage = _errorMessageFrom(error);
+        });
+        return;
       }
 
       await _waitForMinimum(
@@ -122,8 +115,6 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
             displayImageHeight: widget.imageHeight,
             ocrResult: widget.ocrResult,
             response: response,
-            isDummy: isDummy,
-            debugInfo: debugInfo,
           ),
         ),
       );
@@ -173,7 +164,11 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
                       currentStep: _currentStep,
                       statusMessage: _statusMessage,
                     )
-                  : _ErrorBody(message: _errorMessage!),
+                  : _ErrorBody(
+                      message: _errorMessage!,
+                      onPressed: () =>
+                          Navigator.of(context).popUntil((route) => route.isFirst),
+                    ),
             ),
           ),
         ),
@@ -378,9 +373,13 @@ class _StepTile extends StatelessWidget {
 }
 
 class _ErrorBody extends StatelessWidget {
-  const _ErrorBody({required this.message});
+  const _ErrorBody({
+    required this.message,
+    required this.onPressed,
+  });
 
   final String message;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -414,7 +413,7 @@ class _ErrorBody extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               OutlinedButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: onPressed,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
                   side: const BorderSide(color: Colors.white54),

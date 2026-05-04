@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -46,7 +46,8 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
         setState(() {
-          _errorMessage = '사용 가능한 카메라를 찾을 수 없어요.';
+          _errorMessage =
+              '\uc0ac\uc6a9 \uac00\ub2a5\ud55c \uce74\uba54\ub77c\ub97c \ucc3e\uc744 \uc218 \uc5c6\uc5b4\uc694';
           _isInitializing = false;
         });
         return;
@@ -75,13 +76,16 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
     } on CameraException catch (error) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = error.description ?? '카메라를 시작할 수 없어요.';
+        _errorMessage =
+            error.description ??
+            '\uce74\uba54\ub77c\ub97c \uc2dc\uc791\ud560 \uc218 \uc5c6\uc5b4\uc694';
         _isInitializing = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = '카메라를 시작할 수 없어요.';
+        _errorMessage =
+            '\uce74\uba54\ub77c\ub97c \uc2dc\uc791\ud560 \uc218 \uc5c6\uc5b4\uc694';
         _isInitializing = false;
       });
     }
@@ -110,7 +114,12 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
     } on CameraException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.description ?? '사진을 촬영할 수 없어요.')),
+        SnackBar(
+          content: Text(
+            error.description ??
+                '\uc0ac\uc9c4\uc744 \ucd2c\uc601\ud560 \uc218 \uc5c6\uc5b4\uc694',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isTakingPicture = false);
@@ -133,232 +142,291 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    final topPad = MediaQuery.paddingOf(context).top;
-    final bottomPad = MediaQuery.paddingOf(context).bottom;
+    final mediaSize = MediaQuery.sizeOf(context);
+    final padding = MediaQuery.paddingOf(context);
+    final hasPreview =
+        !_isInitializing && controller != null && controller.value.isInitialized;
+    final topPad = padding.top;
+    final bottomPad = padding.bottom;
+    const horizontalInset = 18.0;
+    const dockHeight = 168.0;
+    final frameTop = topPad + 82;
+    final frameBottom = bottomPad + dockHeight;
+    final frameHeight = math.max(
+      260.0,
+      mediaSize.height - frameTop - frameBottom,
+    );
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // ── Camera preview ──────────────────────────────────────────
           Positioned.fill(
             child: _isInitializing
                 ? const Center(
                     child: CircularProgressIndicator(color: Colors.white),
                   )
-                : controller == null || !controller.value.isInitialized
-                ? _CameraError(message: _errorMessage)
-                : CameraPreview(controller),
+                : hasPreview
+                ? CameraPreview(controller)
+                : _CameraError(message: _errorMessage),
           ),
-
-          // ── Top gradient overlay ─────────────────────────────────────
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            height: topPad + 100,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.65),
-                    Colors.transparent,
-                  ],
-                ),
+          if (hasPreview) ...[
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: _CameraAtmosphere(),
               ),
             ),
-          ),
-
-          // ── Bottom gradient overlay ──────────────────────────────────
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: bottomPad + 180,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.80),
-                    Colors.transparent,
-                  ],
-                ),
+            Positioned(
+              left: 16,
+              right: 16,
+              top: topPad + 8,
+              child: _CameraTopBar(
+                onClose: () => Navigator.pop(context),
               ),
             ),
-          ),
-
-          // ── Top bar: close + title ───────────────────────────────────
-          Positioned(
-            left: 0,
-            right: 0,
-            top: topPad + 4,
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded),
-                  color: Colors.white,
-                  iconSize: 26,
-                ),
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      '메뉴판 촬영',
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 48), // balance close button
-              ],
+            Positioned(
+              left: horizontalInset,
+              right: horizontalInset,
+              top: frameTop,
+              height: frameHeight,
+              child: _GuideFrame(scanAnimation: _scanAnim),
             ),
-          ),
-
-          // ── Viewfinder brackets ──────────────────────────────────────
-          Center(
-            child: SizedBox(
-              width: MediaQuery.sizeOf(context).width * 0.82,
-              height: MediaQuery.sizeOf(context).width * 0.82 * 0.62,
-              child: Stack(
-                children: [
-                  // Scan line
-                  AnimatedBuilder(
-                    animation: _scanAnim,
-                    builder: (_, __) => Positioned(
-                      left: 12,
-                      right: 12,
-                      top: _scanAnim.value *
-                          (MediaQuery.sizeOf(context).width * 0.82 * 0.62 -
-                              24),
-                      child: Container(
-                        height: 2,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [
-                              Colors.transparent,
-                              Color(0xFFF06292),
-                              Colors.transparent,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(1),
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Corners
-                  const _Corner(top: true, left: true),
-                  const _Corner(top: true, left: false),
-                  const _Corner(top: false, left: true),
-                  const _Corner(top: false, left: false),
-                ],
+            Positioned(
+              left: horizontalInset + 12,
+              right: horizontalInset + 12,
+              top: frameTop + 18,
+              child: const _GuideBanner(),
+            ),
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: bottomPad + 20,
+              child: _CaptureDock(
+                isTakingPicture: _isTakingPicture,
+                isPressingShutter: _isPressingShutter,
+                onTapDown: _isTakingPicture
+                    ? null
+                    : (_) => _setShutterPressed(true),
+                onTapCancel: _isTakingPicture
+                    ? null
+                    : () => _setShutterPressed(false),
+                onTapUp: _isTakingPicture
+                    ? null
+                    : (_) => _setShutterPressed(false),
+                onTap: _isTakingPicture ? null : _onShutterTap,
               ),
             ),
-          ),
-
-          // ── Hint text below viewfinder ───────────────────────────────
-          Align(
-            alignment: const Alignment(0, 0.38),
-            child: Text(
-              '메뉴판 전체가 프레임 안에 들어오게 맞춰주세요',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.75),
-                fontSize: 13,
-              ),
-            ),
-          ),
-
-          // ── Bottom: shutter button ───────────────────────────────────
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: bottomPad + 32,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '글자가 선명하게 보일 때 촬영하세요',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                GestureDetector(
-                  onTapDown: _isTakingPicture
-                      ? null
-                      : (_) => _setShutterPressed(true),
-                  onTapCancel: _isTakingPicture
-                      ? null
-                      : () => _setShutterPressed(false),
-                  onTapUp: _isTakingPicture
-                      ? null
-                      : (_) => _setShutterPressed(false),
-                  onTap: _isTakingPicture ? null : _onShutterTap,
-                  child: AnimatedScale(
-                    scale: _isTakingPicture
-                        ? 0.88
-                        : _isPressingShutter
-                        ? 0.94
-                        : 1.0,
-                    duration: const Duration(milliseconds: 140),
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFFF06292),
-                          width: 4,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFF06292)
-                                .withValues(alpha: _isPressingShutter ? 0.58 : 0.40),
-                            blurRadius: _isPressingShutter ? 24 : 18,
-                            spreadRadius: _isPressingShutter ? 4 : 2,
-                          ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.all(8),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _isTakingPicture
-                              ? Colors.white54
-                              : Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          ],
         ],
       ),
     );
   }
 }
 
-// ── Corner bracket widget ──────────────────────────────────────────────────
-class _Corner extends StatelessWidget {
-  const _Corner({required this.top, required this.left});
+class _CameraAtmosphere extends StatelessWidget {
+  const _CameraAtmosphere();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0.0, 0.14, 0.34, 0.74, 1.0],
+          colors: [
+            const Color(0x660B1017),
+            const Color(0x1C0B1017),
+            Colors.transparent,
+            const Color(0x140B1017),
+            const Color(0x700B1017),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CameraTopBar extends StatelessWidget {
+  const _CameraTopBar({required this.onClose});
+
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _GlassIconButton(
+          icon: Icons.close_rounded,
+          onPressed: onClose,
+        ),
+        Expanded(
+          child: Center(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                child: Text(
+                  '\uba54\ub274\ud310 \ucd2c\uc601',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 44),
+      ],
+    );
+  }
+}
+
+class _GlassIconButton extends StatelessWidget {
+  const _GlassIconButton({
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.18),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: Icon(icon, color: Colors.white, size: 24),
+        ),
+      ),
+    );
+  }
+}
+
+class _GuideFrame extends StatelessWidget {
+  const _GuideFrame({required this.scanAnimation});
+
+  final Animation<double> scanAnimation;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.18),
+            width: 1.2,
+          ),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withValues(alpha: 0.06),
+              Colors.white.withValues(alpha: 0.015),
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.16),
+              blurRadius: 28,
+              spreadRadius: 4,
+            ),
+          ],
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final travel = math.max(0.0, constraints.maxHeight - 132);
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0.0, 0.2, 0.74, 1.0],
+                        colors: [
+                          Colors.white.withValues(alpha: 0.04),
+                          Colors.transparent,
+                          Colors.transparent,
+                          Colors.white.withValues(alpha: 0.02),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                AnimatedBuilder(
+                  animation: scanAnimation,
+                  builder: (_, __) => Positioned(
+                    left: 18,
+                    right: 18,
+                    top: 72 + scanAnimation.value * travel,
+                    child: Container(
+                      height: 3,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [
+                            Colors.transparent,
+                            Color(0xFFFF8FB1),
+                            Color(0xFFFFD1DE),
+                            Color(0xFFFF8FB1),
+                            Colors.transparent,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFF06292).withValues(alpha: 0.32),
+                            blurRadius: 14,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const _FrameCorner(top: true, left: true),
+                const _FrameCorner(top: true, left: false),
+                const _FrameCorner(top: false, left: true),
+                const _FrameCorner(top: false, left: false),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _FrameCorner extends StatelessWidget {
+  const _FrameCorner({
+    required this.top,
+    required this.left,
+  });
 
   final bool top;
   final bool left;
 
   @override
   Widget build(BuildContext context) {
-    const double len = 22;
-    const double thick = 3.0;
-    const Color color = Color(0xFFF06292);
+    const double len = 28;
+    const double thick = 3.5;
+    const Color color = Color(0xFFFF8FB1);
     const radius = BorderRadius.all(Radius.circular(2));
 
     return Positioned(
@@ -371,7 +439,6 @@ class _Corner extends StatelessWidget {
         height: len,
         child: Stack(
           children: [
-            // Horizontal arm
             Positioned(
               top: top ? 0 : null,
               bottom: top ? null : 0,
@@ -386,7 +453,6 @@ class _Corner extends StatelessWidget {
                 ),
               ),
             ),
-            // Vertical arm
             Positioned(
               top: top ? 0 : null,
               bottom: top ? null : 0,
@@ -408,6 +474,177 @@ class _Corner extends StatelessWidget {
   }
 }
 
+class _GuideBanner extends StatelessWidget {
+  const _GuideBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF101822).withValues(alpha: 0.40),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF06292).withValues(alpha: 0.18),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.menu_book_rounded,
+                color: Color(0xFFFFB6C9),
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '\uba54\ub274\ud310\uc774 \ud654\uba74 \uc548\uc5d0 \ud06c\uac8c \ubcf4\uc774\ub3c4\ub85d \ub9de\ucdb0\uc8fc\uc138\uc694',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      height: 1.35,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '\ud754\ub4e4\ub9bc \uc5c6\uc774 \uc7a0\uc2dc \uba48\ucd98 \ub4a4 \ucd2c\uc601\ud574\uc8fc\uc138\uc694.',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CaptureDock extends StatelessWidget {
+  const _CaptureDock({
+    required this.isTakingPicture,
+    required this.isPressingShutter,
+    required this.onTapDown,
+    required this.onTapCancel,
+    required this.onTapUp,
+    required this.onTap,
+  });
+
+  final bool isTakingPicture;
+  final bool isPressingShutter;
+  final GestureTapDownCallback? onTapDown;
+  final VoidCallback? onTapCancel;
+  final GestureTapUpCallback? onTapUp;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1219).withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.16),
+            blurRadius: 24,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '\uae00\uc790\uac00 \uc120\uba85\ud558\uac8c \ubcf4\uc77c \ub54c \uc7a0\uc2dc \uba48\ucd98 \ub4a4 \ucd2c\uc601\ud574\uc8fc\uc138\uc694.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.78),
+                fontSize: 13,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTapDown: onTapDown,
+              onTapCancel: onTapCancel,
+              onTapUp: onTapUp,
+              onTap: onTap,
+              child: AnimatedScale(
+                scale: isTakingPicture
+                    ? 0.9
+                    : isPressingShutter
+                    ? 0.95
+                    : 1.0,
+                duration: const Duration(milliseconds: 140),
+                child: Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.12),
+                    border: Border.all(color: Colors.white30, width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFF06292)
+                            .withValues(alpha: isPressingShutter ? 0.46 : 0.28),
+                        blurRadius: isPressingShutter ? 28 : 20,
+                        spreadRadius: isPressingShutter ? 5 : 2,
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          isTakingPicture
+                              ? Colors.white70
+                              : Colors.white,
+                          isTakingPicture
+                              ? Colors.white54
+                              : const Color(0xFFFFF4F7),
+                        ],
+                      ),
+                      border: Border.all(
+                        color: const Color(0xFFF06292).withValues(alpha: 0.26),
+                        width: 3,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CameraError extends StatelessWidget {
   const _CameraError({required this.message});
 
@@ -418,13 +655,24 @@ class _CameraError extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Text(
-          message ?? '카메라를 사용할 수 없어요.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            height: 1.4,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              message ??
+                  '\uce74\uba54\ub77c\ub97c \uc0ac\uc6a9\ud560 \uc218 \uc5c6\uc5b4\uc694',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                height: 1.45,
+              ),
+            ),
           ),
         ),
       ),

@@ -240,9 +240,11 @@ class _SummaryCard extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _SummaryLanguageItem(
-            option: departure,
-            label: '\ucd9c\ubc1c',
+          Expanded(
+            child: _SummaryLanguageItem(
+              option: departure,
+              label: '\ucd9c\ubc1c',
+            ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -276,9 +278,11 @@ class _SummaryCard extends StatelessWidget {
               ],
             ),
           ),
-          _SummaryLanguageItem(
-            option: arrival,
-            label: '\ub3c4\ucc29',
+          Expanded(
+            child: _SummaryLanguageItem(
+              option: arrival,
+              label: '\ub3c4\ucc29',
+            ),
           ),
         ],
       ),
@@ -312,6 +316,9 @@ class _SummaryLanguageItem extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           option.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: const TextStyle(
             color: Colors.white,
             fontSize: 13,
@@ -321,6 +328,9 @@ class _SummaryLanguageItem extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           option.nativeName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.75),
             fontSize: 11,
@@ -348,12 +358,15 @@ class _LanguageGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final childAspectRatio =
+        MediaQuery.sizeOf(context).width < 380 ? 0.78 : 0.88;
+
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        childAspectRatio: 0.88,
+        childAspectRatio: childAspectRatio,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
@@ -427,6 +440,8 @@ class _LanguageCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     option.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,
@@ -441,6 +456,8 @@ class _LanguageCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     option.nativeName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 10,

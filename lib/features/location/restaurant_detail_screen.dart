@@ -306,12 +306,16 @@ class _ReviewCard extends StatelessWidget {
             children: [
               const Icon(Icons.person, size: 16, color: Colors.grey),
               const SizedBox(width: 4),
-              Text(
-                username,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+              Expanded(
+                child: Text(
+                  username,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
                 ),
               ),
               if (hasOverlap) ...[

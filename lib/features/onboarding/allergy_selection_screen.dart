@@ -109,13 +109,13 @@ class _AllergySelectionScreenState extends State<AllergySelectionScreen> {
                   child: GridView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: allergyItems.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          childAspectRatio: 0.9,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                        ),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      childAspectRatio:
+                          MediaQuery.sizeOf(context).width < 380 ? 0.82 : 0.9,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                    ),
                     itemBuilder: (context, index) {
                       final item = allergyItems[index];
                       final isSelected = selectedItems.contains(index);
@@ -169,6 +169,8 @@ class _AllergySelectionScreenState extends State<AllergySelectionScreen> {
                                       const SizedBox(height: 6),
                                       Text(
                                         item['name']!,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
