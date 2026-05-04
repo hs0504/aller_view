@@ -1,7 +1,6 @@
-import 'dart:typed_data';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/ocr/ocr_result.dart';
 import '../../core/ocr/vision_api_client.dart';
@@ -19,6 +18,8 @@ class MenuPhotoPreviewScreen extends StatefulWidget {
 }
 
 class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
+  static const _minimumProcessingOverlayDuration = Duration(milliseconds: 450);
+
   late final Future<_PreviewData> _previewDataFuture;
   bool _isAnalyzing = false;
 
@@ -47,10 +48,13 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
     required double imageHeight,
   }) async {
     setState(() => _isAnalyzing = true);
+    final startedAt = DateTime.now();
 
     try {
       final OcrResult result = await VisionApiClient.extractText(imageBytes);
+      if (!mounted) return;
 
+      await _waitForMinimum(startedAt, _minimumProcessingOverlayDuration);
       if (!mounted) return;
 
       await Navigator.push(
@@ -69,9 +73,19 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
       _showError(e.message);
     } catch (_) {
       if (!mounted) return;
-      _showError('알 수 없는 오류가 발생했습니다. 다시 시도해 주세요.');
+      _showError('예상하지 못한 오류가 발생했습니다. 다시 시도해 주세요.');
     } finally {
-      if (mounted) setState(() => _isAnalyzing = false);
+      if (mounted) {
+        setState(() => _isAnalyzing = false);
+      }
+    }
+  }
+
+  Future<void> _waitForMinimum(DateTime startedAt, Duration minimum) async {
+    final elapsed = DateTime.now().difference(startedAt);
+    final remaining = minimum - elapsed;
+    if (remaining > Duration.zero) {
+      await Future<void>.delayed(remaining);
     }
   }
 
@@ -119,8 +133,7 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed:
-                            _isAnalyzing ? null : () => Navigator.pop(context),
+                        onPressed: _isAnalyzing ? null : () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           side: const BorderSide(color: Colors.white70),
@@ -137,11 +150,15 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
                       child: ElevatedButton(
                         onPressed: quality.isTooBlurry || _isAnalyzing
                             ? null
-                            : () => _startOcr(
-                                preview.bytes,
-                                imageWidth: preview.imageWidth,
-                                imageHeight: preview.imageHeight,
-                              ),
+                            : () async {
+                                await HapticFeedback.selectionClick();
+                                if (!mounted) return;
+                                await _startOcr(
+                                  preview.bytes,
+                                  imageWidth: preview.imageWidth,
+                                  imageHeight: preview.imageHeight,
+                                );
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFF06292),
                           disabledBackgroundColor: Colors.white24,
@@ -167,6 +184,10 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
                   ],
                 ),
               ),
+              if (_isAnalyzing)
+                const Positioned.fill(
+                  child: _ProcessingOverlay(),
+                ),
             ],
           );
         },
@@ -235,6 +256,102 @@ class _QualityBanner extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProcessingOverlay extends StatelessWidget {
+  const _ProcessingOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.56),
+      ),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 380),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFF181818),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF06292).withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: const SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFF06292),
+                          strokeWidth: 3,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      '메뉴 텍스트를 추출하고 있습니다',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '사진 속 메뉴 문구와 위치를 확인하는 중입니다.',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        height: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.document_scanner_outlined, color: Color(0xFFF06292), size: 16),
+                          SizedBox(width: 8),
+                          Text(
+                            '텍스트 추출 중',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

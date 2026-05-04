@@ -149,7 +149,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                 onAllergyChanged: _loadAllergyData,
               ),
               const SizedBox(height: 20),
-              _SectionHeader(title: '메뉴판 분석'),
+              _SectionHeader(title: '\uba54\ub274\ud310\u0020\ubd84\uc11d'),
               const SizedBox(height: 10),
               _CameraCard(
                 onCameraTap: _handleCameraCardPressed,
@@ -166,7 +166,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                 arrivalCode: _arrivalLanguage,
               ),
               const SizedBox(height: 24),
-              _SectionHeader(title: '빠른 메뉴'),
+              _SectionHeader(title: '\ube60\ub978\u0020\uba54\ub274'),
               const SizedBox(height: 14),
               GridView.count(
                 crossAxisCount: 2,
@@ -178,8 +178,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                 children: [
                   _QuickMenuCard(
                     icon: Icons.medical_information_outlined,
-                    title: '알레르기 관리',
-                    desc: '내 알레르기 항목 편집',
+                    title: '\uc54c\ub808\ub974\uae30\u0020\uad00\ub9ac',
+                    desc: '\ub0b4\u0020\uc54c\ub808\ub974\uae30\u0020\ud56d\ubaa9\u0020\ud3b8\uc9d1',
                     onTap: () async {
                       await Navigator.push(
                         context,
@@ -189,13 +189,13 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                           ),
                         ),
                       );
-                      _loadAllergyData(); // 편집 후 홈 데이터 갱신
+                      _loadAllergyData(); // ??轅붽틓????獄쏅챸???????????????????ル늉????
                     },
                   ),
                   _QuickMenuCard(
                     icon: Icons.restaurant_menu_outlined,
-                    title: '식성 관리',
-                    desc: '음식 선호도 편집',
+                    title: '\ucde8\ud5a5\u0020\uad00\ub9ac',
+                    desc: '\uc74c\uc2dd\u0020\uc120\ud638\ub3c4\u0020\ud3b8\uc9d1',
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -207,8 +207,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                   ),
                   _QuickMenuCard(
                     icon: Icons.location_on,
-                    title: '주변 식당 찾기',
-                    desc: '현재 위치 기반 식당 탐색',
+                    title: '\uc8fc\ubcc0\u0020\uc2dd\ub2f9\u0020\ucc3e\uae30',
+                    desc: '\ud604\uc7ac\u0020\uc704\uce58\u0020\uae30\ubc18\u0020\uc8fc\ubcc0\u0020\uc2dd\ub2f9\u0020\ud0d0\uc0c9',
                     onTap: () {
                       Navigator.push(
                         context,
@@ -220,8 +220,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                   ),
                   _QuickMenuCard(
                     icon: Icons.translate_outlined,
-                    title: '언어 설정',
-                    desc: '번역 언어 변경',
+                    title: '\uc5b8\uc5b4\u0020\uc124\uc815',
+                    desc: '\ubc88\uc5ed\u0020\uc5b8\uc5b4\u0020\ubcc0\uacbd',
                     onTap: () async {
                       await Navigator.push(
                         context,
@@ -244,8 +244,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         unselectedItemColor: Colors.grey,
         currentIndex: 0,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: '홈'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: '\ud648'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: '\ub0b4\u0020\uc815\ubcf4'),
         ],
       ),
     );
@@ -292,7 +292,7 @@ class _AllergyHeaderCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '오늘도 안전한 식사를 도와드릴게요 🍽',
+            '\uc624\ub298\ub3c4\u0020\uc548\uc804\ud55c\u0020\uc2dd\uc0ac\ub97c\u0020\ub3c4\uc640\ub4dc\ub9b4\uac8c\uc694',
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
@@ -302,13 +302,13 @@ class _AllergyHeaderCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const Text(
-            '등록된 알레르기 항목',
+            '\ub4f1\ub85d\ub41c\u0020\uc54c\ub808\ub974\uae30\u0020\ud56d\ubaa9',
             style: TextStyle(color: Colors.white70, fontSize: 12),
           ),
           const SizedBox(height: 8),
           allergyIndices.isEmpty
               ? const Text(
-                  '항목 없음',
+                  '\ud56d\ubaa9\u0020\uc5c6\uc74c',
                   style: TextStyle(color: Colors.white54, fontSize: 13),
                 )
               : Wrap(
@@ -324,7 +324,7 @@ class _AllergyHeaderCard extends StatelessWidget {
                     ),
                     if (remaining > 0)
                       _AllergyChip(
-                        label: '+$remaining개 더',
+                        label: '+$remaining\uac1c',
                         dotColor: Colors.white54,
                         onTap: () => _showAllAllergies(context),
                       ),
@@ -436,7 +436,7 @@ class _AllergyBottomSheet extends StatelessWidget {
                 ? const Padding(
                     padding: EdgeInsets.all(24),
                     child: Text(
-                      '등록된 알레르기 항목이 없어요.',
+                      '\ub4f1\ub85d\ub41c\u0020\uc54c\ub808\ub974\uae30\u0020\ud56d\ubaa9\uc774\u0020\uc5c6\uc5b4\uc694\u002e',
                       style: TextStyle(color: Colors.grey, fontSize: 14),
                     ),
                   )
@@ -530,14 +530,15 @@ class _CameraCard extends StatelessWidget {
   final String departureCode;
   final String arrivalCode;
 
-  LanguageOption _find(List<LanguageOption> list, String code) =>
-      list.firstWhere((l) => l.code == code, orElse: () => list.first);
+  LanguageOption _findOption(List<LanguageOption> options, String code) {
+    return options.firstWhere(
+      (option) => option.code == code,
+      orElse: () => options.first,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final dep = _find(departureLanguageOptions, departureCode);
-    final arr = _find(arrivalLanguageOptions, arrivalCode);
-
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -559,7 +560,7 @@ class _CameraCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: Column(
           children: [
-            // ── 스캔 영역 ──
+            // ???? ????嶺뚮ㅎ?????????ㅻ쑄??????
             GestureDetector(
               onTap: onCameraTap,
               child: Stack(
@@ -607,7 +608,7 @@ class _CameraCard extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const Text(
-                                '메뉴판 스캔하기',
+                                '\uba54\ub274\ud310\u0020\ucd2c\uc601\ud558\uae30',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
@@ -617,7 +618,7 @@ class _CameraCard extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'AI가 알레르기 성분을 자동으로 분석해요',
+                                '\u0041\u0049\uac00\u0020\uc54c\ub808\ub974\uae30\u0020\uc131\ubd84\uc744\u0020\uc790\ub3d9\uc73c\ub85c\u0020\ubd84\uc11d\ud574\uc694',
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.80),
                                   fontSize: 12,
@@ -655,60 +656,57 @@ class _CameraCard extends StatelessWidget {
                 ],
               ),
             ),
-            // ── 구분선 ──
             Container(
               height: 1,
               color: Colors.white.withValues(alpha: 0.20),
             ),
-            // ── 언어 설정 행 ──
             GestureDetector(
               onTap: onLanguageTap,
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.12),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                 child: Row(
                   children: [
-                    Text(dep.flag, style: const TextStyle(fontSize: 19)),
-                    const SizedBox(width: 6),
                     Text(
-                      dep.name,
+                      '${_findOption(departureLanguageOptions, departureCode).flag} '
+                      '${_findOption(departureLanguageOptions, departureCode).name}',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Icon(
-                        Icons.arrow_forward_rounded,
-                        color: Colors.white.withValues(alpha: 0.60),
-                        size: 14,
+                    const SizedBox(width: 10),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 16,
+                      color: Colors.white.withValues(alpha: 0.82),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '${_findOption(arrivalLanguageOptions, arrivalCode).flag} '
+                        '${_findOption(arrivalLanguageOptions, arrivalCode).name}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Text(arr.flag, style: const TextStyle(fontSize: 19)),
-                    const SizedBox(width: 6),
-                    Text(
-                      arr.name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const Spacer(),
+                    const SizedBox(width: 10),
                     Icon(
                       Icons.edit_outlined,
-                      color: Colors.white.withValues(alpha: 0.65),
-                      size: 13,
+                      size: 16,
+                      color: Colors.white.withValues(alpha: 0.90),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Text(
-                      '변경',
+                      '\ubcc0\uacbd',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.65),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.90),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],

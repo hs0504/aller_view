@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/allergy_data.dart';
+import '../data/language_data.dart';
 
 class UserPrefs {
   UserPrefs._();
@@ -108,17 +109,59 @@ class UserPrefs {
     required String departureLanguage,
     required String arrivalLanguage,
   }) async {
+    final normalized = _normalizeLanguageSettings(
+      departureLanguage: departureLanguage,
+      arrivalLanguage: arrivalLanguage,
+    );
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyDepartureLanguage, departureLanguage);
-    await prefs.setString(_keyArrivalLanguage, arrivalLanguage);
+    await prefs.setString(_keyDepartureLanguage, normalized.departure);
+    await prefs.setString(_keyArrivalLanguage, normalized.arrival);
   }
 
   static Future<({String departure, String arrival})> loadLanguageSettings()
       async {
     final prefs = await SharedPreferences.getInstance();
+    final normalized = _normalizeLanguageSettings(
+      departureLanguage: prefs.getString(_keyDepartureLanguage) ?? 'ja',
+      arrivalLanguage: prefs.getString(_keyArrivalLanguage) ?? 'ko',
+    );
+
+    final storedDeparture = prefs.getString(_keyDepartureLanguage);
+    final storedArrival = prefs.getString(_keyArrivalLanguage);
+    if (storedDeparture != normalized.departure ||
+        storedArrival != normalized.arrival) {
+      await prefs.setString(_keyDepartureLanguage, normalized.departure);
+      await prefs.setString(_keyArrivalLanguage, normalized.arrival);
+    }
+
+    return normalized;
+  }
+
+  static ({String departure, String arrival}) _normalizeLanguageSettings({
+    required String departureLanguage,
+    required String arrivalLanguage,
+  }) {
+    final departureCodes = departureLanguageOptions.map((e) => e.code).toSet();
+    final arrivalCodes = arrivalLanguageOptions.map((e) => e.code).toSet();
+
+    final departure = departureCodes.contains(departureLanguage)
+        ? departureLanguage
+        : departureLanguageOptions.first.code;
+
+    var arrival = arrivalCodes.contains(arrivalLanguage)
+        ? arrivalLanguage
+        : arrivalLanguageOptions.first.code;
+
+    if (departure == arrival) {
+      arrival = arrivalLanguageOptions.firstWhere(
+        (option) => option.code != departure,
+        orElse: () => arrivalLanguageOptions.first,
+      ).code;
+    }
+
     return (
-      departure: prefs.getString(_keyDepartureLanguage) ?? 'ja',
-      arrival: prefs.getString(_keyArrivalLanguage) ?? 'ko',
+      departure: departure,
+      arrival: arrival,
     );
   }
 }

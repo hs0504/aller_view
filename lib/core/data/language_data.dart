@@ -26,11 +26,6 @@ const List<LanguageOption> departureLanguageOptions = [
   LanguageOption(code: 'zh-CN', name: '중국어 간체',  nativeName: '中文(简体)',   flag: '🇨🇳'),
   LanguageOption(code: 'zh-TW', name: '중국어 번체',  nativeName: '中文(繁體)',   flag: '🇹🇼'),
   LanguageOption(code: 'en',    name: '영어',        nativeName: 'English',     flag: '🇺🇸'),
-  LanguageOption(code: 'th',    name: '태국어',      nativeName: 'ภาษาไทย',    flag: '🇹🇭'),
-  LanguageOption(code: 'vi',    name: '베트남어',    nativeName: 'Tiếng Việt',  flag: '🇻🇳'),
-  LanguageOption(code: 'fr',    name: '프랑스어',    nativeName: 'Français',    flag: '🇫🇷'),
-  LanguageOption(code: 'es',    name: '스페인어',    nativeName: 'Español',     flag: '🇪🇸'),
-  LanguageOption(code: 'it',    name: '이탈리아어',  nativeName: 'Italiano',    flag: '🇮🇹'),
   LanguageOption(code: 'ko',    name: '한국어',      nativeName: '한국어',       flag: '🇰🇷'),
 ];
 

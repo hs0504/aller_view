@@ -154,7 +154,7 @@ class AnalyzeMenuResponse {
       AllergyRisk.unknown,
     ];
     const allergenCycle = [
-      ['계란', '빵'],
+      ['계란', '밀'],
       ['우유', '새우'],
       <String>[],
       <String>[],

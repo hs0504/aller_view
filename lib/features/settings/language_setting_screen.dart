@@ -22,8 +22,32 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
     _loadSettings();
   }
 
+  void _showDistinctLanguageMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          '\ucd9c\ubc1c\u0020\uc5b8\uc5b4\uc640\u0020\ub3c4\ucc29\u0020\uc5b8\uc5b4\ub294\u0020\ub2e4\ub974\uac8c\u0020\uc124\uc815\ud574\u0020\uc8fc\uc138\uc694\u002e',
+        ),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _swap() {
+    final departureCodes = departureLanguageOptions.map((e) => e.code).toSet();
+    final arrivalCodes = arrivalLanguageOptions.map((e) => e.code).toSet();
+    if (!departureCodes.contains(_arrival) || !arrivalCodes.contains(_departure)) return;
+    setState(() {
+      final temp = _departure;
+      _departure = _arrival;
+      _arrival = temp;
+    });
+  }
+
   Future<void> _loadSettings() async {
     final settings = await UserPrefs.loadLanguageSettings();
+    if (!mounted) return;
     setState(() {
       _departure = settings.departure;
       _arrival = settings.arrival;
@@ -32,6 +56,11 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
   }
 
   Future<void> _onSave() async {
+    if (_departure == _arrival) {
+      _showDistinctLanguageMessage();
+      return;
+    }
+
     await UserPrefs.saveLanguageSettings(
       departureLanguage: _departure,
       arrivalLanguage: _arrival,
@@ -39,7 +68,9 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('언어 설정이 저장되었습니다.'),
+        content: Text(
+          '\uc5b8\uc5b4\u0020\uc124\uc815\uc774\u0020\uc800\uc7a5\ub418\uc5c8\uc5b4\uc694\u002e',
+        ),
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 2),
       ),
@@ -47,14 +78,12 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
     Navigator.pop(context);
   }
 
-  LanguageOption _findOption(
-    List<LanguageOption> options,
-    String code,
-  ) =>
-      options.firstWhere(
-        (o) => o.code == code,
-        orElse: () => options.first,
-      );
+  LanguageOption _findOption(List<LanguageOption> options, String code) {
+    return options.firstWhere(
+      (option) => option.code == code,
+      orElse: () => options.first,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -73,7 +102,7 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
           child: Container(color: const Color(0xFFFCE4EC), height: 1),
         ),
         title: Text(
-          '언어 설정',
+          '\uc5b8\uc5b4\u0020\uc124\uc815',
           style: GoogleFonts.poppins(
             fontSize: 17,
             fontWeight: FontWeight.w700,
@@ -82,7 +111,9 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFF06292)))
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFF06292)),
+            )
           : Column(
               children: [
                 Expanded(
@@ -91,52 +122,66 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── 현재 설정 요약 카드 ──────────────────────────
                         _SummaryCard(
-                          departure: _findOption(departureLanguageOptions, _departure),
-                          arrival: _findOption(arrivalLanguageOptions, _arrival),
+                          departure: _findOption(
+                            departureLanguageOptions,
+                            _departure,
+                          ),
+                          arrival: _findOption(
+                            arrivalLanguageOptions,
+                            _arrival,
+                          ),
+                          onSwap: _swap,
                         ),
                         const SizedBox(height: 28),
-
-                        // ── 출발 언어 ────────────────────────────────────
-                        _SectionHeader(title: '출발 언어'),
+                        _SectionHeader(
+                          title: '\ucd9c\ubc1c\u0020\uc5b8\uc5b4',
+                        ),
                         const SizedBox(height: 6),
                         Text(
-                          '분석할 메뉴판의 언어를 선택하세요',
-                          style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                          '\ubd84\uc11d\ud560\u0020\uba54\ub274\ud310\uc758\u0020\uc5b8\uc5b4\ub97c\u0020\uc120\ud0dd\ud574\u0020\uc8fc\uc138\uc694\u002e',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
                         ),
                         const SizedBox(height: 14),
                         _LanguageGrid(
                           options: departureLanguageOptions,
                           selectedCode: _departure,
+                          disabledCodes: {_arrival},
                           onSelect: (code) {
                             setState(() => _departure = code);
                           },
+                          onDisabledTap: _showDistinctLanguageMessage,
                         ),
                         const SizedBox(height: 28),
-
-                        // ── 도착 언어 ────────────────────────────────────
-                        _SectionHeader(title: '도착 언어'),
+                        _SectionHeader(
+                          title: '\ub3c4\ucc29\u0020\uc5b8\uc5b4',
+                        ),
                         const SizedBox(height: 6),
                         Text(
-                          '번역 결과를 표시할 언어를 선택하세요',
-                          style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                          '\ubc88\uc5ed\u0020\uacb0\uacfc\ub97c\u0020\ud45c\uc2dc\ud560\u0020\uc5b8\uc5b4\ub97c\u0020\uc120\ud0dd\ud574\u0020\uc8fc\uc138\uc694\u002e',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
                         ),
                         const SizedBox(height: 14),
                         _LanguageGrid(
                           options: arrivalLanguageOptions,
                           selectedCode: _arrival,
+                          disabledCodes: {_departure},
                           onSelect: (code) {
                             setState(() => _arrival = code);
                           },
+                          onDisabledTap: _showDistinctLanguageMessage,
                         ),
                         const SizedBox(height: 12),
                       ],
                     ),
                   ),
                 ),
-
-                // ── 저장 버튼 ─────────────────────────────────────────
                 SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -154,7 +199,7 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
                           elevation: 0,
                         ),
                         child: const Text(
-                          '저장하기',
+                          '\uc800\uc7a5\ud558\uae30',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -170,16 +215,16 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
   }
 }
 
-// ── 현재 설정 요약 카드 ──────────────────────────────────────────────────────
-
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.departure,
     required this.arrival,
+    this.onSwap,
   });
 
   final LanguageOption departure;
   final LanguageOption arrival;
+  final VoidCallback? onSwap;
 
   @override
   Widget build(BuildContext context) {
@@ -195,24 +240,46 @@ class _SummaryCard extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _SummaryLanguageItem(option: departure, label: '출발'),
+          _SummaryLanguageItem(
+            option: departure,
+            label: '\ucd9c\ubc1c',
+          ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
               children: [
-                const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 22),
-                const SizedBox(height: 4),
+                Material(
+                  color: Colors.white,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: onSwap,
+                    customBorder: const CircleBorder(),
+                    child: const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Icon(
+                        Icons.swap_horiz_rounded,
+                        color: Color(0xFFF06292),
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Text(
-                  '번역',
+                  '\uad50\ud658',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 11,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
           ),
-          _SummaryLanguageItem(option: arrival, label: '도착'),
+          _SummaryLanguageItem(
+            option: arrival,
+            label: '\ub3c4\ucc29',
+          ),
         ],
       ),
     );
@@ -220,7 +287,10 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _SummaryLanguageItem extends StatelessWidget {
-  const _SummaryLanguageItem({required this.option, required this.label});
+  const _SummaryLanguageItem({
+    required this.option,
+    required this.label,
+  });
 
   final LanguageOption option;
   final String label;
@@ -261,18 +331,20 @@ class _SummaryLanguageItem extends StatelessWidget {
   }
 }
 
-// ── 언어 그리드 ──────────────────────────────────────────────────────────────
-
 class _LanguageGrid extends StatelessWidget {
   const _LanguageGrid({
     required this.options,
     required this.selectedCode,
     required this.onSelect,
+    this.disabledCodes = const {},
+    this.onDisabledTap,
   });
 
   final List<LanguageOption> options;
   final String selectedCode;
   final ValueChanged<String> onSelect;
+  final Set<String> disabledCodes;
+  final VoidCallback? onDisabledTap;
 
   @override
   Widget build(BuildContext context) {
@@ -286,10 +358,12 @@ class _LanguageGrid extends StatelessWidget {
         mainAxisSpacing: 10,
       ),
       itemCount: options.length,
-      itemBuilder: (_, i) => _LanguageCard(
-        option: options[i],
-        isSelected: options[i].code == selectedCode,
-        onTap: () => onSelect(options[i].code),
+      itemBuilder: (_, index) => _LanguageCard(
+        option: options[index],
+        isSelected: options[index].code == selectedCode,
+        isDisabled: disabledCodes.contains(options[index].code),
+        onTap: () => onSelect(options[index].code),
+        onDisabledTap: onDisabledTap,
       ),
     );
   }
@@ -299,31 +373,45 @@ class _LanguageCard extends StatelessWidget {
   const _LanguageCard({
     required this.option,
     required this.isSelected,
+    required this.isDisabled,
     required this.onTap,
+    this.onDisabledTap,
   });
 
   final LanguageOption option;
   final bool isSelected;
+  final bool isDisabled;
   final VoidCallback onTap;
+  final VoidCallback? onDisabledTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: isDisabled ? onDisabledTap : onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFF06292) : Colors.white,
+          color: isDisabled
+              ? const Color(0xFFF6F6F6)
+              : isSelected
+                  ? const Color(0xFFF06292)
+                  : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: isSelected
               ? null
-              : Border.all(color: const Color(0xFFEEEEEE)),
+              : Border.all(
+                  color: isDisabled
+                      ? const Color(0xFFE7E7E7)
+                      : const Color(0xFFEEEEEE),
+                ),
           boxShadow: [
             BoxShadow(
-              color: isSelected
-                  ? const Color(0xFFF06292).withValues(alpha: 0.30)
-                  : Colors.black.withValues(alpha: 0.04),
+              color: isDisabled
+                  ? Colors.black.withValues(alpha: 0.01)
+                  : isSelected
+                      ? const Color(0xFFF06292).withValues(alpha: 0.30)
+                      : Colors.black.withValues(alpha: 0.04),
               blurRadius: isSelected ? 10 : 4,
               offset: const Offset(0, 2),
             ),
@@ -343,7 +431,11 @@ class _LanguageCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: isSelected ? Colors.white : Colors.black87,
+                      color: isDisabled
+                          ? Colors.black38
+                          : isSelected
+                              ? Colors.white
+                              : Colors.black87,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -352,9 +444,11 @@ class _LanguageCard extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 10,
-                      color: isSelected
-                          ? Colors.white.withValues(alpha: 0.75)
-                          : Colors.black38,
+                      color: isDisabled
+                          ? Colors.black26
+                          : isSelected
+                              ? Colors.white.withValues(alpha: 0.75)
+                              : Colors.black38,
                     ),
                   ),
                 ],
@@ -378,14 +472,22 @@ class _LanguageCard extends StatelessWidget {
                   ),
                 ),
               ),
+            if (isDisabled)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Icon(
+                  Icons.block_rounded,
+                  size: 14,
+                  color: Colors.black.withValues(alpha: 0.22),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 }
-
-// ── 섹션 헤더 ────────────────────────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title});

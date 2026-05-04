@@ -1,14 +1,11 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../core/api/analyze_menu_client.dart';
 import '../../core/api/analyze_menu_result.dart';
 import '../../core/ocr/ocr_result.dart';
 import '../../core/storage/user_prefs.dart';
-// TODO(overlay-dummy): 더미 테스트 완료 후 아래 import 제거
 import 'overlay_result_screen.dart';
 
 class OcrResultScreen extends StatefulWidget {
@@ -30,421 +27,344 @@ class OcrResultScreen extends StatefulWidget {
 }
 
 class _OcrResultScreenState extends State<OcrResultScreen> {
-  bool _isLoading = false;
-  String _departureLanguage = 'ja';
-  String _arrivalLanguage = 'ko';
-  List<String> _userAllergies = [];
-  Map<String, int> _userPreferences = {};
+  static const _minimumStepOneDuration = Duration(milliseconds: 850);
+  static const _minimumStepTwoDuration = Duration(milliseconds: 1200);
+  static const _minimumStepThreeDuration = Duration(milliseconds: 800);
+
+  String? _errorMessage;
+  int _currentStep = 1;
+  String _statusMessage = '추출된 텍스트와 사용자 설정을 정리하고 있습니다.';
 
   @override
   void initState() {
     super.initState();
-    _loadUserSettings();
+    _startFlow();
   }
 
-  Future<void> _loadUserSettings() async {
-    final settings = await UserPrefs.loadLanguageSettings();
-    final allergyIndices = await UserPrefs.loadAllergyIndices();
-    final preferenceScores = await UserPrefs.loadPreferenceScores();
-    if (!mounted) return;
-    setState(() {
-      _departureLanguage = settings.departure;
-      _arrivalLanguage = settings.arrival;
-      _userAllergies = UserPrefs.allergyNamesFromIndices(allergyIndices);
-      _userPreferences = UserPrefs.preferenceScoresToEn(preferenceScores);
-    });
-  }
+  Future<void> _startFlow() async {
+    final stepOneStartedAt = DateTime.now();
 
-  void _showRequestPreview({
-    required List<String> lines,
-    required String title,
-    String? rawText,
-  }) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _RequestPreviewBottomSheet(
-        title: title,
-        requestUrl: AnalyzeMenuClient.requestUrl,
-        requestJson: AnalyzeMenuClient.buildPrettyRequestJson(
-          lines,
-          departureLanguage: _departureLanguage,
-          arrivalLanguage: _arrivalLanguage,
-          userAllergies: _userAllergies,
-          userPreferences: _userPreferences,
-        ),
-        lines: lines,
-        rawText: rawText,
-      ),
-    );
-  }
-
-  Future<void> _onAnalyzeTap() async {
-    setState(() => _isLoading = true);
+    if (widget.ocrResult.isEmpty) {
+      setState(() {
+        _errorMessage = '텍스트를 인식하지 못했습니다. 메뉴가 잘 보이도록 다시 촬영해 주세요.';
+      });
+      return;
+    }
 
     try {
-      final response = await AnalyzeMenuClient.analyzeMenu(
-        widget.ocrResult.lines,
-        departureLanguage: _departureLanguage,
-        arrivalLanguage: _arrivalLanguage,
-        userAllergies: _userAllergies,
-        userPreferences: _userPreferences,
+      final settings = await UserPrefs.loadLanguageSettings();
+      final allergyIndices = await UserPrefs.loadAllergyIndices();
+      final preferenceScores = await UserPrefs.loadPreferenceScores();
+      final userAllergies = UserPrefs.allergyNamesFromIndices(allergyIndices);
+      final userPreferences = UserPrefs.preferenceScoresToEn(preferenceScores);
+      final lines = widget.ocrResult.lines;
+
+      final requestJson = AnalyzeMenuClient.buildPrettyRequestJson(
+        lines,
+        departureLanguage: settings.departure,
+        arrivalLanguage: settings.arrival,
+        userAllergies: userAllergies,
+        userPreferences: userPreferences,
+      );
+
+      await _waitForMinimum(stepOneStartedAt, _minimumStepOneDuration);
+      if (!mounted) return;
+      setState(() {
+        _currentStep = 2;
+        _statusMessage = '추천 메뉴와 알레르기 위험 분석을 요청하고 있습니다.';
+      });
+      final stepTwoStartedAt = DateTime.now();
+
+      AnalyzeMenuResponse response;
+      OverlayDebugInfo? debugInfo;
+      var isDummy = false;
+
+      try {
+        response = await AnalyzeMenuClient.analyzeMenu(
+          lines,
+          departureLanguage: settings.departure,
+          arrivalLanguage: settings.arrival,
+          userAllergies: userAllergies,
+          userPreferences: userPreferences,
+        );
+      } catch (error) {
+        isDummy = true;
+        response = AnalyzeMenuResponse.dummy(lines);
+        debugInfo = OverlayDebugInfo(
+          requestUrl: AnalyzeMenuClient.requestUrl,
+          requestJson: requestJson,
+          ocrLines: lines,
+          failureMessage: _errorMessageFrom(error),
+        );
+      }
+
+      await _waitForMinimum(
+        stepTwoStartedAt,
+        _minimumStepTwoDuration,
       );
       if (!mounted) return;
-      _showDebugBottomSheet(response: response);
-    } on AnalyzeMenuException catch (e) {
+
+      setState(() {
+        _currentStep = 3;
+        _statusMessage = '오버레이 화면을 준비하고 있습니다.';
+      });
+
+      final stepThreeStartedAt = DateTime.now();
+      await _waitForMinimum(stepThreeStartedAt, _minimumStepThreeDuration);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: Colors.redAccent,
+
+      await Navigator.pushReplacement<void, void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => OverlayResultScreen(
+            imageBytes: widget.imageBytes,
+            displayImageWidth: widget.imageWidth,
+            displayImageHeight: widget.imageHeight,
+            ocrResult: widget.ocrResult,
+            response: response,
+            isDummy: isDummy,
+            debugInfo: debugInfo,
+          ),
         ),
       );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = '분석을 준비하는 중 문제가 발생했습니다. 이전 화면으로 돌아가 다시 시도해 주세요.';
+      });
     }
   }
 
-  void _showDebugBottomSheet({required AnalyzeMenuResponse response}) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _DebugBottomSheet(
-        response: response,
-        onOpenOverlay: () => _openOverlay(response),
-      ),
-    );
+  Future<void> _waitForMinimum(DateTime startedAt, Duration minimum) async {
+    final elapsed = DateTime.now().difference(startedAt);
+    final remaining = minimum - elapsed;
+    if (remaining > Duration.zero) {
+      await Future<void>.delayed(remaining);
+    }
   }
 
-  void _openOverlay(AnalyzeMenuResponse response) {
-    Navigator.push<void>(
-      context,
-      MaterialPageRoute<void>(
-        builder: (_) => OverlayResultScreen(
-          imageBytes: widget.imageBytes,
-          displayImageWidth: widget.imageWidth,
-          displayImageHeight: widget.imageHeight,
-          ocrResult: widget.ocrResult,
-          response: response,
-        ),
-      ),
-    );
-  }
-
-  // TODO(overlay-dummy): 더미 테스트 완료 후 이 메서드 전체 제거
-  void _onDummyOverlayTap() {
-    if (widget.ocrResult.isEmpty) return;
-    final dummyResponse = AnalyzeMenuResponse.dummy(widget.ocrResult.lines);
-    Navigator.push<void>(
-      context,
-      MaterialPageRoute<void>(
-        builder: (_) => OverlayResultScreen(
-          imageBytes: widget.imageBytes,
-          displayImageWidth: widget.imageWidth,
-          displayImageHeight: widget.imageHeight,
-          ocrResult: widget.ocrResult,
-          response: dummyResponse,
-          isDummy: true,
-        ),
-      ),
-    );
-  }
-
-  void _showPasteTextDialog() {
-    final controller = TextEditingController();
-
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('텍스트 붙여넣기'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: TextField(
-              controller: controller,
-              autofocus: true,
-              minLines: 8,
-              maxLines: 16,
-              decoration: const InputDecoration(
-                hintText: 'OCR 원본 텍스트를 붙여넣어 주세요',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('취소'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final rawText = controller.text.trim();
-                if (rawText.isEmpty) return;
-
-                Navigator.pop(dialogContext);
-                final lines = AnalyzeMenuClient.buildLinesFromRawText(rawText);
-                _showRequestPreview(
-                  lines: lines,
-                  title: '붙여넣은 텍스트 기준 요청 JSON',
-                  rawText: rawText,
-                );
-              },
-              child: const Text('JSON 만들기'),
-            ),
-          ],
-        );
-      },
-    );
+  String _errorMessageFrom(Object error) {
+    if (error is AnalyzeMenuException) {
+      return error.message;
+    }
+    return error.toString();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F8),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.paste_rounded, color: Colors.black87),
-            onPressed: _showPasteTextDialog,
-            tooltip: '텍스트 붙여넣기',
-          ),
-        ],
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          '메뉴판 인식 결과',
-          style: TextStyle(
-            color: Colors.black87,
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF121212),
+              Color(0xFF1E1E1E),
+            ],
           ),
         ),
-        centerTitle: true,
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: _errorMessage == null
+                  ? _LoadingBody(
+                      currentStep: _currentStep,
+                      statusMessage: _statusMessage,
+                    )
+                  : _ErrorBody(message: _errorMessage!),
+            ),
+          ),
+        ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+    );
+  }
+}
+
+class _LoadingBody extends StatelessWidget {
+  const _LoadingBody({
+    required this.currentStep,
+    required this.statusMessage,
+  });
+
+  final int currentStep;
+  final String statusMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF06292).withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: const SizedBox(
+                  width: 30,
+                  height: 30,
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFF06292),
+                    strokeWidth: 3,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                '메뉴를 분석하고 있습니다',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                statusMessage,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              _StepTile(
+                label: '결과 정리',
+                description: '추출된 텍스트와 사용자 설정을 준비합니다.',
+                state: currentStep > 1
+                    ? _StepState.completed
+                    : _StepState.active,
+              ),
+              const SizedBox(height: 12),
+              _StepTile(
+                label: '서버 분석 요청',
+                description: '추천 메뉴와 알레르기 정보를 조회합니다.',
+                state: currentStep > 2
+                    ? _StepState.completed
+                    : currentStep == 2
+                    ? _StepState.active
+                    : _StepState.pending,
+              ),
+              const SizedBox(height: 12),
+              _StepTile(
+                label: '오버레이 준비',
+                description: '분석 결과를 화면 위에 표시할 준비를 합니다.',
+                state: currentStep == 3
+                    ? _StepState.active
+                    : _StepState.pending,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _StepState {
+  completed,
+  active,
+  pending,
+}
+
+class _StepTile extends StatelessWidget {
+  const _StepTile({
+    required this.label,
+    required this.description,
+    required this.state,
+  });
+
+  final String label;
+  final String description;
+  final _StepState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompleted = state == _StepState.completed;
+    final isActive = state == _StepState.active;
+    final accent = isCompleted
+        ? const Color(0xFF81C784)
+        : isActive
+        ? const Color(0xFFF06292)
+        : Colors.white24;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isActive ? accent : Colors.white10,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: isCompleted || isActive ? 0.18 : 0.12),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: isCompleted
+                  ? const Icon(Icons.check_rounded, size: 15, color: Color(0xFF81C784))
+                  : isActive
+                  ? const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFFF06292),
+                      ),
+                    )
+                  : const Icon(Icons.more_horiz_rounded, size: 15, color: Colors.white38),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _PhotoThumbnail(imageBytes: widget.imageBytes),
-                  const SizedBox(height: 24),
-                  _ExtractedTextSection(ocrResult: widget.ocrResult),
-                ],
-              ),
-            ),
-          ),
-          _BottomAction(
-            ocrResult: widget.ocrResult,
-            isLoading: _isLoading,
-            onAnalyzeTap: _onAnalyzeTap,
-            onPreviewTap: () => _showRequestPreview(
-              lines: widget.ocrResult.lines,
-              title: 'OCR 추출 결과 기준 요청 JSON',
-              rawText: widget.ocrResult.fullText,
-            ),
-            onPasteTap: _showPasteTextDialog,
-            // TODO(overlay-dummy): 더미 테스트 완료 후 아래 파라미터 제거
-            onDummyOverlayTap: _onDummyOverlayTap,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DebugBottomSheet extends StatefulWidget {
-  const _DebugBottomSheet({
-    required this.response,
-    required this.onOpenOverlay,
-  });
-
-  final AnalyzeMenuResponse response;
-  final VoidCallback onOpenOverlay;
-
-  @override
-  State<_DebugBottomSheet> createState() => _DebugBottomSheetState();
-}
-
-class _DebugBottomSheetState extends State<_DebugBottomSheet>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  String get _requestSummary => [
-        'POST ${widget.response.requestUrl}',
-        '',
-        widget.response.requestJson,
-      ].join('\n');
-
-  String get _responseSummary {
-    try {
-      final decoded = jsonDecode(widget.response.rawResponseBody);
-      return const JsonEncoder.withIndent('  ').convert(decoded);
-    } catch (_) {
-      return widget.response.rawResponseBody;
-    }
-  }
-
-  Future<void> _copyResponseJson() async {
-    await Clipboard.setData(ClipboardData(text: _responseSummary));
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('응답 JSON을 클립보드에 복사했습니다.'),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.75,
-      maxChildSize: 0.95,
-      minChildSize: 0.4,
-      builder: (_, scrollController) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  const Icon(Icons.bug_report, color: Color(0xFF4CAF50), size: 18),
-                  const SizedBox(width: 8),
                   Text(
-                    'API 응답 결과  ·  ${widget.response.items.length}개 항목',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
+                    label,
+                    style: TextStyle(
+                      color: isActive || isCompleted ? Colors.white : Colors.white54,
                       fontSize: 14,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const Spacer(),
-                  TextButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      widget.onOpenOverlay();
-                    },
-                    icon: const Icon(Icons.layers_outlined, size: 16),
-                    label: const Text('오버레이 보기'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF4CAF50),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            TabBar(
-              controller: _tabController,
-              indicatorColor: const Color(0xFF4CAF50),
-              labelColor: const Color(0xFF4CAF50),
-              unselectedLabelColor: Colors.white54,
-              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              tabs: const [
-                Tab(text: '파싱된 결과'),
-                Tab(text: '추천 메뉴'),
-                Tab(text: '요청 JSON'),
-                Tab(text: '응답 JSON'),
-              ],
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  ListView.separated(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: widget.response.items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) =>
-                        _ParsedItemCard(item: widget.response.items[i]),
-                  ),
-                  ListView.separated(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: widget.response.recommendations.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) => _RecommendationCard(
-                      item: widget.response.recommendations[i],
-                    ),
-                  ),
-                  SingleChildScrollView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(16),
-                    child: SelectableText(
-                      _requestSummary,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        color: Color(0xFF9CDCFE),
-                        height: 1.6,
-                      ),
-                    ),
-                  ),
-                  SingleChildScrollView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _copyResponseJson,
-                            icon: const Icon(Icons.copy_rounded),
-                            label: const Text('응답 JSON 복사'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF4CAF50),
-                              foregroundColor: Colors.white,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SelectableText(
-                          _responseSummary,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                            color: Color(0xFF9CDCFE),
-                            height: 1.6,
-                          ),
-                        ),
-                      ],
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      color: Colors.white60,
+                      fontSize: 12,
+                      height: 1.45,
                     ),
                   ),
                 ],
@@ -457,664 +377,53 @@ class _DebugBottomSheetState extends State<_DebugBottomSheet>
   }
 }
 
-class _RequestPreviewBottomSheet extends StatefulWidget {
-  const _RequestPreviewBottomSheet({
-    required this.title,
-    required this.requestUrl,
-    required this.requestJson,
-    required this.lines,
-    this.rawText,
-  });
+class _ErrorBody extends StatelessWidget {
+  const _ErrorBody({required this.message});
 
-  final String title;
-  final String requestUrl;
-  final String requestJson;
-  final List<String> lines;
-  final String? rawText;
-
-  @override
-  State<_RequestPreviewBottomSheet> createState() =>
-      _RequestPreviewBottomSheetState();
-}
-
-class _RequestPreviewBottomSheetState extends State<_RequestPreviewBottomSheet>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  String get _requestSummary => [
-        'POST ${widget.requestUrl}',
-        '',
-        widget.requestJson,
-      ].join('\n');
-
-  String get _rawTextSummary {
-    return [
-      widget.rawText?.isEmpty ?? true ? '(empty)' : widget.rawText!,
-    ].join('\n');
-  }
-
-  Future<void> _copyRequestJson() async {
-    await Clipboard.setData(ClipboardData(text: widget.requestJson));
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('요청 JSON을 클립보드에 복사했습니다.'),
-      ),
-    );
-  }
+  final String message;
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.75,
-      maxChildSize: 0.95,
-      minChildSize: 0.4,
-      builder: (_, scrollController) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white12),
         ),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Color(0xFFEF5350),
+                size: 40,
               ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  const Icon(Icons.bug_report, color: Color(0xFF4CAF50), size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '${widget.title}  ·  ${widget.lines.length}개 항목',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: _copyRequestJson,
-                    icon: const Icon(Icons.copy_rounded, size: 16),
-                    label: const Text('JSON 복사'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF4CAF50),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 16),
+              Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
               ),
-            ),
-            const SizedBox(height: 12),
-            TabBar(
-              controller: _tabController,
-              indicatorColor: const Color(0xFF4CAF50),
-              labelColor: const Color(0xFF4CAF50),
-              unselectedLabelColor: Colors.white54,
-              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              tabs: const [
-                Tab(text: '항목 목록'),
-                Tab(text: '요청 JSON'),
-                Tab(text: '원본 텍스트'),
-              ],
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  ListView.separated(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: widget.lines.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) => _RequestItemCard(
-                      itemId: 'box_${(i + 1).toString().padLeft(3, '0')}',
-                      rawText: widget.lines[i],
-                    ),
-                  ),
-                  SingleChildScrollView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _copyRequestJson,
-                            icon: const Icon(Icons.copy_rounded),
-                            label: const Text('실제 전송 JSON 복사'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF4CAF50),
-                              foregroundColor: Colors.white,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SelectableText(
-                          _requestSummary,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                            color: Color(0xFF9CDCFE),
-                            height: 1.6,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SingleChildScrollView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(16),
-                    child: SelectableText(
-                      _rawTextSummary,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        color: Color(0xFF9CDCFE),
-                        height: 1.6,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ParsedItemCard extends StatelessWidget {
-  const _ParsedItemCard({required this.item});
-
-  final AnalyzedMenuItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2D2D2D),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFF4CAF50).withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              item.itemId,
-              style: const TextStyle(
-                color: Color(0xFF4CAF50),
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'monospace',
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          _DebugRow(
-            label: 'original   ',
-            value: item.originalText,
-            color: const Color(0xFFCE9178),
-          ),
-          const SizedBox(height: 4),
-          _DebugRow(
-            label: 'translated ',
-            value: item.translatedText,
-            color: const Color(0xFF9CDCFE),
-          ),
-          const SizedBox(height: 4),
-          _DebugRow(
-            label: 'normalized ',
-            value: item.normalizedText,
-            color: const Color(0xFFDCDCAA),
-          ),
-          if (item.dishId != null) ...[
-            const SizedBox(height: 4),
-            _DebugRow(
-              label: 'dish_id    ',
-              value: item.dishId.toString(),
-              color: const Color(0xFFB5CEA8),
-            ),
-          ],
-          const SizedBox(height: 4),
-          _DebugRow(
-            label: 'allergy    ',
-            value: item.allergyRisk.label,
-            color: switch (item.allergyRisk) {
-              AllergyRisk.danger  => const Color(0xFFEF5350),
-              AllergyRisk.caution => const Color(0xFFFFD54F),
-              AllergyRisk.safe    => const Color(0xFF81C784),
-              AllergyRisk.unknown => Colors.white38,
-            },
-          ),
-          if (item.detectedAllergens.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            _DebugRow(
-              label: 'allergens  ',
-              value: item.detectedAllergens.join(', '),
-              color: const Color(0xFFEF5350),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _RecommendationCard extends StatelessWidget {
-  const _RecommendationCard({required this.item});
-
-  final RecommendedMenuItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2D2D2D),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF06292).withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              item.itemId,
-              style: const TextStyle(
-                color: Color(0xFFF06292),
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'monospace',
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          _DebugRow(
-            label: 'korean_name',
-            value: item.koreanName,
-            color: const Color(0xFF9CDCFE),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RequestItemCard extends StatelessWidget {
-  const _RequestItemCard({
-    required this.itemId,
-    required this.rawText,
-  });
-
-  final String itemId;
-  final String rawText;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2D2D2D),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFF4CAF50).withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              itemId,
-              style: const TextStyle(
-                color: Color(0xFF4CAF50),
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'monospace',
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          _DebugRow(
-            label: 'raw_text',
-            value: rawText,
-            color: const Color(0xFFCE9178),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DebugRow extends StatelessWidget {
-  const _DebugRow({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white38,
-            fontSize: 12,
-            fontFamily: 'monospace',
-          ),
-        ),
-        const Text(
-          ': ',
-          style: TextStyle(color: Colors.white38, fontSize: 12, fontFamily: 'monospace'),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(color: color, fontSize: 12, fontFamily: 'monospace'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PhotoThumbnail extends StatelessWidget {
-  const _PhotoThumbnail({required this.imageBytes});
-
-  final Uint8List imageBytes;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: AspectRatio(
-        aspectRatio: 4 / 3,
-        child: Image.memory(imageBytes, fit: BoxFit.cover),
-      ),
-    );
-  }
-}
-
-class _ExtractedTextSection extends StatelessWidget {
-  const _ExtractedTextSection({required this.ocrResult});
-
-  final OcrResult ocrResult;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.text_fields, size: 18, color: Color(0xFFF06292)),
-            const SizedBox(width: 6),
-            const Text(
-              '추출된 텍스트',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: Colors.black87,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              '${ocrResult.lines.length}줄',
-              style: const TextStyle(fontSize: 13, color: Colors.black45),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _ExtractionStrategyBadge(label: ocrResult.strategyLabel),
-        const SizedBox(height: 12),
-        if (ocrResult.isEmpty)
-          const _EmptyTextCard()
-        else
-          _TextCard(lines: ocrResult.lines),
-      ],
-    );
-  }
-}
-
-class _ExtractionStrategyBadge extends StatelessWidget {
-  const _ExtractionStrategyBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFE4EC),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Text(
-          'OCR 경로: $label',
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFFF06292),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TextCard extends StatelessWidget {
-  const _TextCard({required this.lines});
-
-  final List<String> lines;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEEEEEE)),
-      ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: lines.length,
-        separatorBuilder: (_, __) =>
-            const Divider(height: 1, indent: 16, endIndent: 16),
-        itemBuilder: (_, index) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Text(
-            lines[index],
-            style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyTextCard extends StatelessWidget {
-  const _EmptyTextCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEEEEEE)),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.all(24),
-        child: Center(
-          child: Text(
-            '텍스트를 인식하지 못했습니다.\n메뉴판이 잘 보이도록 다시 촬영해 주세요.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: Colors.black45, height: 1.5),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomAction extends StatelessWidget {
-  const _BottomAction({
-    required this.ocrResult,
-    required this.isLoading,
-    required this.onAnalyzeTap,
-    required this.onPreviewTap,
-    required this.onPasteTap,
-    // TODO(overlay-dummy): 더미 테스트 완료 후 아래 파라미터 제거
-    required this.onDummyOverlayTap,
-  });
-
-  final OcrResult ocrResult;
-  final bool isLoading;
-  final VoidCallback onAnalyzeTap;
-  final VoidCallback onPreviewTap;
-  final VoidCallback onPasteTap;
-  // TODO(overlay-dummy): 더미 테스트 완료 후 아래 필드 제거
-  final VoidCallback onDummyOverlayTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: (ocrResult.isEmpty || isLoading) ? null : onAnalyzeTap,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF06292),
-                  disabledBackgroundColor: Colors.grey.shade300,
+              const SizedBox(height: 20),
+              OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(52),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                  side: const BorderSide(color: Colors.white54),
+                  minimumSize: const Size(160, 48),
                 ),
-                child: isLoading
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text(
-                        'AI 서버로 분석 요청',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                      ),
+                child: const Text('이전 화면으로'),
               ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: ocrResult.isEmpty ? null : onPreviewTap,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFF06292),
-                  side: const BorderSide(color: Color(0xFFF06292)),
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text(
-                  '요청 JSON 미리보기',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            // TODO(overlay-dummy): 더미 테스트 완료 후 아래 버튼 전체 제거 ──────────
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed:
-                    (ocrResult.isEmpty || isLoading) ? null : onDummyOverlayTap,
-                icon: const Icon(Icons.layers_outlined, size: 18),
-                label: const Text(
-                  '오버레이 UI 테스트 (더미)',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.orange,
-                  side: const BorderSide(color: Colors.orange),
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-            ),
-            // ────────────────────────────────────────────────────────────────────
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: onPasteTap,
-                child: const Text(
-                  '텍스트 붙여넣어 JSON 만들기',
-                  style: TextStyle(color: Colors.black45, fontSize: 14),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

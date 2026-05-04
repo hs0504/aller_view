@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'menu_photo_preview_screen.dart';
@@ -18,6 +19,7 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
   CameraController? _controller;
   bool _isInitializing = true;
   bool _isTakingPicture = false;
+  bool _isPressingShutter = false;
   String? _errorMessage;
 
   late final AnimationController _scanAnim;
@@ -89,7 +91,9 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
     final controller = _controller;
     if (controller == null ||
         !controller.value.isInitialized ||
-        _isTakingPicture) return;
+        _isTakingPicture) {
+      return;
+    }
 
     setState(() => _isTakingPicture = true);
 
@@ -111,6 +115,19 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
     } finally {
       if (mounted) setState(() => _isTakingPicture = false);
     }
+  }
+
+  void _setShutterPressed(bool isPressed) {
+    if (_isTakingPicture || _isPressingShutter == isPressed) {
+      return;
+    }
+    setState(() => _isPressingShutter = isPressed);
+  }
+
+  Future<void> _onShutterTap() async {
+    _setShutterPressed(false);
+    await HapticFeedback.selectionClick();
+    await _takePicture();
   }
 
   @override
@@ -274,9 +291,22 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
                 ),
                 const SizedBox(height: 20),
                 GestureDetector(
-                  onTap: _isTakingPicture ? null : _takePicture,
+                  onTapDown: _isTakingPicture
+                      ? null
+                      : (_) => _setShutterPressed(true),
+                  onTapCancel: _isTakingPicture
+                      ? null
+                      : () => _setShutterPressed(false),
+                  onTapUp: _isTakingPicture
+                      ? null
+                      : (_) => _setShutterPressed(false),
+                  onTap: _isTakingPicture ? null : _onShutterTap,
                   child: AnimatedScale(
-                    scale: _isTakingPicture ? 0.88 : 1.0,
+                    scale: _isTakingPicture
+                        ? 0.88
+                        : _isPressingShutter
+                        ? 0.94
+                        : 1.0,
                     duration: const Duration(milliseconds: 140),
                     child: Container(
                       width: 80,
@@ -290,9 +320,9 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
                         boxShadow: [
                           BoxShadow(
                             color: const Color(0xFFF06292)
-                                .withValues(alpha: 0.40),
-                            blurRadius: 18,
-                            spreadRadius: 2,
+                                .withValues(alpha: _isPressingShutter ? 0.58 : 0.40),
+                            blurRadius: _isPressingShutter ? 24 : 18,
+                            spreadRadius: _isPressingShutter ? 4 : 2,
                           ),
                         ],
                       ),

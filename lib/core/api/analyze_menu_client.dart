@@ -14,7 +14,7 @@ enum AnalyzeMenuRequestMethod {
 class AnalyzeMenuClient {
   AnalyzeMenuClient._();
 
-  static const String _baseUrl = 'https://YOUR_SERVER_URL';
+  static const String _baseUrl = 'https://allerview-ai-server-969074948675.us-central1.run.app';
   static const String _endpoint = '/api/analyze-menu';
   static const AnalyzeMenuRequestMethod _requestMethod =
       AnalyzeMenuRequestMethod.post;
