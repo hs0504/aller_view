@@ -8,6 +8,7 @@ class UserPrefs {
   UserPrefs._();
 
   static const _keySetupComplete = 'setup_complete';
+  static const _keyNickname = 'nickname';
   static const _keyAllergyIndices = 'allergy_indices';
   static const _keyPreferenceScores = 'preference_scores';
   static const _keyDepartureLanguage = 'departure_language';
@@ -21,6 +22,16 @@ class UserPrefs {
   static Future<void> markSetupComplete() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keySetupComplete, true);
+  }
+
+  static Future<void> saveNickname(String nickname) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyNickname, nickname);
+  }
+
+  static Future<String?> loadNickname() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyNickname);
   }
 
   static Future<void> saveAllergyIndices(Set<int> indices) async {

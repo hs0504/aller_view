@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../core/storage/user_prefs.dart';
+import '../../service/auth_service.dart';
+import '../auth/auth_screen.dart';
 import '../home/main_home_screen.dart';
-import '../onboarding/allergy_selection_screen.dart';
+import '../onboarding/nickname_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -25,11 +27,20 @@ class _SplashScreenState extends State<SplashScreen> {
     final isSetup = await UserPrefs.isSetupComplete();
     if (!mounted) return;
 
+    Widget destination;
+    if (!isSetup) {
+      destination = const NicknameScreen();
+    } else {
+      final isLoggedIn = await AuthService().isLoggedIn();
+      destination =
+          isLoggedIn ? const MainHomeScreen() : const AuthScreen();
+    }
+
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) =>
-            isSetup ? const MainHomeScreen() : const AllergySelectionScreen(),
+        pageBuilder: (_, __, ___) => destination,
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(opacity: animation, child: child);
         },

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/storage/user_prefs.dart';
-import '../home/main_home_screen.dart';
+import '../auth/auth_screen.dart';
 
 class PreferenceSelectionScreen extends StatefulWidget {
   const PreferenceSelectionScreen({super.key, this.isEditMode = false});
@@ -112,7 +112,7 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (_, __, ___) => const MainHomeScreen(),
+        pageBuilder: (_, __, ___) => const AuthScreen(),
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(
             opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),

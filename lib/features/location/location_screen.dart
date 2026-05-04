@@ -26,6 +26,7 @@ class _LocationScreenState extends State<LocationScreen> {
   final DioClient _dioClient = DioClient();
   String _searchQuery = '';
   final PanelController _panelController = PanelController();
+  double _panelPosition = 0.0; // 0.0(접힘) ~ 1.0(완전히 열림)
 
   @override
   void initState() {
@@ -119,7 +120,7 @@ class _LocationScreenState extends State<LocationScreen> {
           position: LatLng(r['latitude'], r['longitude']),
           infoWindow: InfoWindow(
             title: r['name'],
-            snippet: '${r['type']} · ❤️ ${r['positive_count']} 💔 ${r['negative_count']}',
+            snippet: '${r['type']} · 안전 ${r['positive_count']}개 위험 ${r['negative_count']}개',
           ),
           onTap: () {
             // 마커를 탭했을 때 패널을 열고 싶다면 이 코드를 사용하세요.
@@ -134,23 +135,36 @@ class _LocationScreenState extends State<LocationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const double panelMinHeight = 160;
+    // const double panelTopBuffer = 8.0;
+    final double panelMaxHeight = MediaQuery.of(context).size.height * 0.5;
+    final double mapBottomPadding =
+        panelMinHeight  + (panelMaxHeight - panelMinHeight) * _panelPosition;
+
     // 1. 지도와 검색창을 포함하는 body 부분을 별도 변수로 추출
     final mapBody = Stack(
+      fit: StackFit.expand,
       children: [
-        GoogleMap(
-          initialCameraPosition: CameraPosition(
-            target: _currentPosition,
-            zoom: 16.0,
+        Positioned(
+          top: 0,
+          bottom: mapBottomPadding,
+          left: 0,
+          right: 0,
+          child: GoogleMap(
+            padding: EdgeInsets.only(bottom: _showPanel ? mapBottomPadding : 0), // <--- 이 줄을 추가하세요.
+            initialCameraPosition: CameraPosition(
+              target: _currentPosition,
+              zoom: 16.0,
+            ),
+            myLocationEnabled: true,
+            markers: _buildMarkers(),
+            mapType: MapType.normal,
+            onMapCreated: (GoogleMapController controller) {
+              if (!_controllerCompleter.isCompleted) {
+                _controllerCompleter.complete(controller);
+              }
+            },
           ),
-          myLocationEnabled: true,
-          markers: _buildMarkers(),
-          mapType: MapType.normal,
-          padding: const EdgeInsets.only(bottom: 160),
-          onMapCreated: (GoogleMapController controller) {
-            if (!_controllerCompleter.isCompleted) {
-              _controllerCompleter.complete(controller);
-            }
-          },
         ),
 
         // 검색창
@@ -211,11 +225,12 @@ class _LocationScreenState extends State<LocationScreen> {
         child: _showPanel
             ? SlidingUpPanel(
           controller: _panelController,
-          minHeight: 160,
-          maxHeight: MediaQuery.of(context).size.height * 0.5,
+          minHeight: panelMinHeight,
+          maxHeight: panelMaxHeight,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          panel: _buildRestaurantList(), // 이제 패널 위젯을 정상적으로 사용
-          body: mapBody, // 위에서 정의한 mapBody 사용
+          onPanelSlide: (pos) => setState(() => _panelPosition = pos),
+          panel: _buildRestaurantList(),
+          body: mapBody,
         )
             : mapBody, // _showPanel이 false이면 패널 없이 mapBody만 표시
       ),
@@ -333,22 +348,26 @@ class _LocationScreenState extends State<LocationScreen> {
                         children: [
                           Row(
                             children: [
-                              const Text('❤️', style: TextStyle(fontSize: 14)),
-                              const SizedBox(width: 2),
+                              const Icon(Icons.check_circle,
+                                  size: 14, color: Colors.green),
+                              const SizedBox(width: 3),
                               Text(
-                                '${r['positive_count']}',
-                                style: const TextStyle(fontSize: 13, color: Colors.black87),
+                                '안전 ${r['positive_count']}개',
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.green),
                               ),
                             ],
                           ),
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              const Text('💔', style: TextStyle(fontSize: 14)),
-                              const SizedBox(width: 2),
+                              const Icon(Icons.cancel,
+                                  size: 14, color: Colors.red),
+                              const SizedBox(width: 3),
                               Text(
-                                '${r['negative_count']}',
-                                style: const TextStyle(fontSize: 13, color: Colors.black87),
+                                '위험 ${r['negative_count']}개',
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.red),
                               ),
                             ],
                           ),
