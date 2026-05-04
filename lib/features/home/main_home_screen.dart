@@ -97,8 +97,10 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
     final quickMenuAspectRatio =
-        MediaQuery.sizeOf(context).width < 380 ? 1.0 : 1.2;
+        screenWidth < 380 || textScale > 1.1 ? 0.88 : 1.2;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFF5F7),
@@ -791,7 +793,7 @@ class _QuickMenuCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     desc,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
