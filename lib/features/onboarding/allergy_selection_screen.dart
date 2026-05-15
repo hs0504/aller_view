@@ -37,6 +37,9 @@ class _AllergySelectionScreenState extends State<AllergySelectionScreen> {
 
   Future<void> _onComplete() async {
     await UserPrefs.saveAllergyIndices(selectedItems);
+    await UserPrefs.saveAllergyIds(
+      selectedItems.map((i) => i + 1).toList(),
+    );
 
     if (!mounted) return;
 

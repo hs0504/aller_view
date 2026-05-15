@@ -6,8 +6,11 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 
 import '../../core/network/dio_client.dart';
+import '../../core/storage/user_prefs.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'restaurant_detail_screen.dart';
+
+enum _SortMode { safest, mostReviewed }
 
 class LocationScreen extends StatefulWidget {
   const LocationScreen({super.key});
@@ -26,12 +29,19 @@ class _LocationScreenState extends State<LocationScreen> {
   final DioClient _dioClient = DioClient();
   String _searchQuery = '';
   final PanelController _panelController = PanelController();
-  double _panelPosition = 0.0; // 0.0(접힘) ~ 1.0(완전히 열림)
+  _SortMode _sortMode = _SortMode.mostReviewed;
+  bool _hasAllergySettings = false;
 
   @override
   void initState() {
     super.initState();
+    _loadAllergySettings();
     _checkPermissionAndFetchLocation();
+  }
+
+  Future<void> _loadAllergySettings() async {
+    final ids = await UserPrefs.loadAllergyIds();
+    if (mounted) setState(() => _hasAllergySettings = ids.isNotEmpty);
   }
 
   Future<void> _checkPermissionAndFetchLocation() async {
@@ -71,11 +81,14 @@ class _LocationScreenState extends State<LocationScreen> {
     );
 
     try {
+      final allergyIds = await UserPrefs.loadAllergyIds();
+
       final response = await _dioClient.get(
         '/restaurants/nearby-restaurants',
         queryParams: {
           'lat': _currentPosition.latitude,
           'lng': _currentPosition.longitude,
+          if (allergyIds.isNotEmpty) 'allergy_ids': allergyIds.join(','),
         },
       );
       if (response != null && response.statusCode == 200) {
@@ -91,6 +104,7 @@ class _LocationScreenState extends State<LocationScreen> {
               'type': restaurant['business_type'] ?? '기타',
               'positive_count': restaurant['positive_count'] ?? 0,
               'negative_count': restaurant['negative_count'] ?? 0,
+              'safe_count': restaurant['safe_count'],
             };
           }).toList();
         });
@@ -120,7 +134,7 @@ class _LocationScreenState extends State<LocationScreen> {
           position: LatLng(r['latitude'], r['longitude']),
           infoWindow: InfoWindow(
             title: r['name'],
-            snippet: '${r['type']} · 안전 ${r['positive_count']}개 위험 ${r['negative_count']}개',
+            snippet: '${r['type']} · 안전 ${r['positive_count']}건 위험 ${r['negative_count']}건',
           ),
           onTap: () {
             // 마커를 탭했을 때 패널을 열고 싶다면 이 코드를 사용하세요.
@@ -136,10 +150,9 @@ class _LocationScreenState extends State<LocationScreen> {
   @override
   Widget build(BuildContext context) {
     const double panelMinHeight = 160;
-    // const double panelTopBuffer = 8.0;
-    final double panelMaxHeight = MediaQuery.of(context).size.height * 0.5;
-    final double mapBottomPadding =
-        panelMinHeight  + (panelMaxHeight - panelMinHeight) * _panelPosition;
+    const double mapBottomOffset = panelMinHeight + 80;
+    final double panelMaxHeight =
+        MediaQuery.of(context).size.height - mapBottomOffset;
 
     // 1. 지도와 검색창을 포함하는 body 부분을 별도 변수로 추출
     final mapBody = Stack(
@@ -147,11 +160,10 @@ class _LocationScreenState extends State<LocationScreen> {
       children: [
         Positioned(
           top: 0,
-          bottom: mapBottomPadding,
+          bottom: panelMinHeight + 80,
           left: 0,
           right: 0,
           child: GoogleMap(
-            padding: EdgeInsets.only(bottom: _showPanel ? mapBottomPadding : 0), // <--- 이 줄을 추가하세요.
             initialCameraPosition: CameraPosition(
               target: _currentPosition,
               zoom: 16.0,
@@ -228,7 +240,6 @@ class _LocationScreenState extends State<LocationScreen> {
           minHeight: panelMinHeight,
           maxHeight: panelMaxHeight,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          onPanelSlide: (pos) => setState(() => _panelPosition = pos),
           panel: _buildRestaurantList(),
           body: mapBody,
         )
@@ -248,6 +259,19 @@ class _LocationScreenState extends State<LocationScreen> {
     )
         .toList();
 
+    final sorted = List<dynamic>.from(filtered);
+    if (_sortMode == _SortMode.safest) {
+      sorted.sort((a, b) =>
+          ((b['safe_count'] ?? 0) as int)
+              .compareTo((a['safe_count'] ?? 0) as int));
+    } else if (_sortMode == _SortMode.mostReviewed) {
+      sorted.sort((a, b) {
+        final bTotal = (b['positive_count'] as int) + (b['negative_count'] as int);
+        final aTotal = (a['positive_count'] as int) + (a['negative_count'] as int);
+        return bTotal.compareTo(aTotal);
+      });
+    }
+
     return Column(
       children: [
         // 드래그 핸들
@@ -265,22 +289,43 @@ class _LocationScreenState extends State<LocationScreen> {
           child: Row(
             children: [
               Text(
-                "주변 식당 ${filtered.length}곳",
+                "주변 식당 ${sorted.length}곳",
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              const Spacer(),
+              DropdownButton<_SortMode>(
+                value: _sortMode,
+                underline: const SizedBox.shrink(),
+                isDense: true,
+                style: const TextStyle(fontSize: 13, color: Colors.black87),
+                items: [
+                  const DropdownMenuItem(
+                    value: _SortMode.mostReviewed,
+                    child: Text('리뷰 많은 순'),
+                  ),
+                  if (_hasAllergySettings)
+                    const DropdownMenuItem(
+                      value: _SortMode.safest,
+                      child: Text('안전 많은 순'),
+                    ),
+                ],
+                onChanged: (mode) {
+                  if (mode != null) setState(() => _sortMode = mode);
+                },
+              ),
             ],
           ),
         ),
         Expanded(
-          child: filtered.isEmpty
+          child: sorted.isEmpty
               ? const Center(child: Text("근처 식당 정보를 불러오는 중..."))
               : ListView.builder(
-            itemCount: filtered.length,
+            itemCount: sorted.length,
             itemBuilder: (context, index) {
-              final r = filtered[index];
+              final r = sorted[index];
               return GestureDetector(
                 onTap: () => Navigator.push(
                   context,
@@ -352,7 +397,7 @@ class _LocationScreenState extends State<LocationScreen> {
                                   size: 14, color: Colors.green),
                               const SizedBox(width: 3),
                               Text(
-                                '안전 ${r['positive_count']}개',
+                                '안전 ${r['positive_count']}건',
                                 style: const TextStyle(
                                     fontSize: 12, color: Colors.green),
                               ),
@@ -365,7 +410,7 @@ class _LocationScreenState extends State<LocationScreen> {
                                   size: 14, color: Colors.red),
                               const SizedBox(width: 3),
                               Text(
-                                '위험 ${r['negative_count']}개',
+                                '위험 ${r['negative_count']}건',
                                 style: const TextStyle(
                                     fontSize: 12, color: Colors.red),
                               ),

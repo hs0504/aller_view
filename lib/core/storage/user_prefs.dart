@@ -47,6 +47,20 @@ class UserPrefs {
     return Set<int>.from(jsonDecode(raw) as List);
   }
 
+  static const _keyAllergyIds = 'allergy_ids';
+
+  static Future<void> saveAllergyIds(List<int> ids) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyAllergyIds, jsonEncode(ids));
+  }
+
+  static Future<List<int>> loadAllergyIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyAllergyIds);
+    if (raw == null) return [];
+    return List<int>.from(jsonDecode(raw) as List);
+  }
+
   static List<String> allergyNamesFromIndices(Set<int> indices) {
     return indices
         .where((i) => i >= 0 && i < allergyItems.length)

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../core/network/dio_client.dart';
+import '../core/storage/user_prefs.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -112,6 +113,11 @@ class AuthService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.data as Map<String, dynamic>;
         await _saveTokens(data['access_token'], data['refresh_token']);
+        if (data['allergy_ids'] != null) {
+          await UserPrefs.saveAllergyIds(
+            List<int>.from(data['allergy_ids'] as List),
+          );
+        }
         return AuthResult.success();
       }
 

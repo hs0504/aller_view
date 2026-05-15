@@ -6,7 +6,7 @@ class DioClient {
   late final Dio publicDio;
 
   static const _storage = FlutterSecureStorage();
-  final String _baseUrl = 'https://nestjs-server-468998297964.asia-northeast3.run.app';
+  final String _baseUrl = 'https://allerview-729003075709.asia-northeast3.run.app';
 
   /// 토큰이 완전히 만료되어 재로그인이 필요할 때 호출되는 콜백
   /// main.dart 또는 최상위 위젯에서 네비게이터 이동 로직을 등록해두면 됨
@@ -32,9 +32,8 @@ class DioClient {
           }
           handler.next(options);
         },
-        onResponse: (response, handler) async {
-          // badResponse를 그대로 반환하도록 설정했으므로 onResponse에서 401 처리
-          if (response.statusCode == 401) {
+        onError: (DioException error, ErrorInterceptorHandler handler) async {
+          if (error.response?.statusCode == 401) {
             final refreshToken = await _storage.read(key: 'refresh_token');
             if (refreshToken != null && refreshToken.isNotEmpty) {
               try {
@@ -46,15 +45,15 @@ class DioClient {
                 if (refreshResponse.statusCode == 200 ||
                     refreshResponse.statusCode == 201) {
                   final newAccess =
-                  refreshResponse.data['access_token'] as String;
+                      refreshResponse.data['access_token'] as String;
                   final newRefresh =
-                  refreshResponse.data['refresh_token'] as String;
+                      refreshResponse.data['refresh_token'] as String;
                   await _storage.write(key: 'access_token', value: newAccess);
                   await _storage.write(
                       key: 'refresh_token', value: newRefresh);
 
                   // 원래 요청 재시도
-                  final opts = response.requestOptions;
+                  final opts = error.requestOptions;
                   opts.headers['Authorization'] = 'Bearer $newAccess';
                   final retryResponse = await publicDio.fetch(opts);
                   handler.resolve(retryResponse);
@@ -69,7 +68,7 @@ class DioClient {
             await _storage.delete(key: 'refresh_token');
             onSessionExpired?.call();
           }
-          handler.next(response);
+          handler.next(error);
         },
       ),
     );
