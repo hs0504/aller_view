@@ -4,26 +4,34 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../ocr/ocr_result.dart';
 import 'analyze_menu_result.dart';
 
-enum AnalyzeMenuRequestMethod {
-  get,
-  post,
-}
+enum AnalyzeMenuRequestMethod { get, post }
 
 class AnalyzeMenuClient {
   AnalyzeMenuClient._();
 
-  static const String _baseUrl = 'https://allerview-ai-server-969074948675.us-central1.run.app';
+  static const String _baseUrl =
+      'https://allerview-ai-server-969074948675.us-central1.run.app';
   static const String _endpoint = '/api/analyze-menu';
   static const AnalyzeMenuRequestMethod _requestMethod =
       AnalyzeMenuRequestMethod.post;
 
-  static List<MenuRequestItem> buildMenuItems(List<String> lines) {
-    return lines.asMap().entries.map((e) {
-      final id = 'box_${(e.key + 1).toString().padLeft(3, '0')}';
-      return MenuRequestItem(itemId: id, rawText: e.value);
-    }).toList();
+  static List<MenuRequestItem> buildMenuItems(List<OcrTextBlock> blocks) {
+    return blocks
+        .map(
+          (block) => MenuRequestItem(
+            itemId: block.itemId,
+            rawText: block.rawText,
+            vertices: block.boundingBox.vertices
+                .map(
+                  (vertex) => {'x': vertex.dx.round(), 'y': vertex.dy.round()},
+                )
+                .toList(),
+          ),
+        )
+        .toList();
   }
 
   static List<String> buildLinesFromRawText(String rawText) {
@@ -35,13 +43,13 @@ class AnalyzeMenuClient {
   }
 
   static Map<String, dynamic> buildRequestBody(
-    List<String> lines, {
+    List<OcrTextBlock> blocks, {
     String departureLanguage = 'ja',
     String arrivalLanguage = 'ko',
     List<String> userAllergies = const [],
     Map<String, int> userPreferences = const {},
   }) {
-    final menuItems = buildMenuItems(lines);
+    final menuItems = buildMenuItems(blocks);
     return {
       'departure_language': departureLanguage,
       'arrival_language': arrivalLanguage,
@@ -52,7 +60,7 @@ class AnalyzeMenuClient {
   }
 
   static String buildPrettyRequestJson(
-    List<String> lines, {
+    List<OcrTextBlock> blocks, {
     String departureLanguage = 'ja',
     String arrivalLanguage = 'ko',
     List<String> userAllergies = const [],
@@ -60,7 +68,7 @@ class AnalyzeMenuClient {
   }) {
     return const JsonEncoder.withIndent('  ').convert(
       buildRequestBody(
-        lines,
+        blocks,
         departureLanguage: departureLanguage,
         arrivalLanguage: arrivalLanguage,
         userAllergies: userAllergies,
@@ -71,6 +79,58 @@ class AnalyzeMenuClient {
 
   static String get requestUrl => Uri.parse('$_baseUrl$_endpoint').toString();
 
+  static Future<AnalyzeMenuRawExchange> analyzeMenuRaw(
+    List<OcrTextBlock> blocks, {
+    String departureLanguage = 'ja',
+    String arrivalLanguage = 'ko',
+    List<String> userAllergies = const [],
+    Map<String, int> userPreferences = const {},
+  }) async {
+    final requestBody = buildRequestBody(
+      blocks,
+      departureLanguage: departureLanguage,
+      arrivalLanguage: arrivalLanguage,
+      userAllergies: userAllergies,
+      userPreferences: userPreferences,
+    );
+    final requestJson = const JsonEncoder.withIndent('  ').convert(requestBody);
+    final requestUrl = _buildRequestUrl(requestBody);
+
+    final http.Response response;
+    try {
+      response = switch (_requestMethod) {
+        AnalyzeMenuRequestMethod.get =>
+          await http
+              .get(
+                Uri.parse(requestUrl),
+                headers: {'Accept': 'application/json; charset=utf-8'},
+              )
+              .timeout(const Duration(seconds: 30)),
+        AnalyzeMenuRequestMethod.post =>
+          await http
+              .post(
+                Uri.parse(requestUrl),
+                headers: {'Content-Type': 'application/json; charset=utf-8'},
+                body: jsonEncode(requestBody),
+              )
+              .timeout(const Duration(seconds: 30)),
+      };
+    } catch (e) {
+      final detail = switch (e) {
+        TimeoutException _ => '요청 시간 초과',
+        _ => '${e.runtimeType}: $e',
+      };
+      throw AnalyzeMenuException('네트워크 오류가 발생했습니다.\n$detail');
+    }
+
+    return AnalyzeMenuRawExchange(
+      requestUrl: requestUrl,
+      requestJson: requestJson,
+      statusCode: response.statusCode,
+      rawResponseBody: utf8.decode(response.bodyBytes),
+    );
+  }
+
   /// OCR 줄 목록을 AI 서버로 전송하여 번역/정규화 결과를 반환합니다.
   ///
   /// [departureLanguage] : 메뉴판 원본 언어 코드 (ISO 639-1, 예: 'ja', 'zh', 'en')
@@ -78,7 +138,7 @@ class AnalyzeMenuClient {
   ///
   /// Throws [AnalyzeMenuException] on network error or server error.
   static Future<AnalyzeMenuResponse> analyzeMenu(
-    List<String> lines, {
+    List<OcrTextBlock> blocks, {
     String departureLanguage = 'ja',
     String arrivalLanguage = 'ko',
     List<String> userAllergies = const [],
@@ -90,9 +150,9 @@ class AnalyzeMenuClient {
       );
     }
 
-    final menuItems = buildMenuItems(lines);
+    final menuItems = buildMenuItems(blocks);
     final requestBody = buildRequestBody(
-      lines,
+      blocks,
       departureLanguage: departureLanguage,
       arrivalLanguage: arrivalLanguage,
       userAllergies: userAllergies,
@@ -106,7 +166,9 @@ class AnalyzeMenuClient {
     debugPrint(
       '│ [AnalyzeMenu] ${_requestMethod.name.toUpperCase()} 요청 → $requestUrl',
     );
-    debugPrint('│ 항목 수: ${menuItems.length}개  |  $departureLanguage → $arrivalLanguage');
+    debugPrint(
+      '│ 항목 수: ${menuItems.length}개  |  $departureLanguage → $arrivalLanguage',
+    );
     debugPrint('├─────────────────────────────────────────');
     debugPrint(requestJson);
     debugPrint('└─────────────────────────────────────────');
@@ -114,19 +176,21 @@ class AnalyzeMenuClient {
     final http.Response response;
     try {
       response = switch (_requestMethod) {
-        AnalyzeMenuRequestMethod.get => await http
-            .get(
-              Uri.parse(requestUrl),
-              headers: {'Accept': 'application/json; charset=utf-8'},
-            )
-            .timeout(const Duration(seconds: 30)),
-        AnalyzeMenuRequestMethod.post => await http
-            .post(
-              Uri.parse(requestUrl),
-              headers: {'Content-Type': 'application/json; charset=utf-8'},
-              body: jsonEncode(requestBody),
-            )
-            .timeout(const Duration(seconds: 30)),
+        AnalyzeMenuRequestMethod.get =>
+          await http
+              .get(
+                Uri.parse(requestUrl),
+                headers: {'Accept': 'application/json; charset=utf-8'},
+              )
+              .timeout(const Duration(seconds: 30)),
+        AnalyzeMenuRequestMethod.post =>
+          await http
+              .post(
+                Uri.parse(requestUrl),
+                headers: {'Content-Type': 'application/json; charset=utf-8'},
+                body: jsonEncode(requestBody),
+              )
+              .timeout(const Duration(seconds: 30)),
       };
     } catch (e) {
       final detail = switch (e) {
@@ -143,8 +207,9 @@ class AnalyzeMenuClient {
     debugPrint('│ [AnalyzeMenu] 응답 ← 상태코드: ${response.statusCode}');
     debugPrint('├─────────────────────────────────────────');
     try {
-      final prettyJson = const JsonEncoder.withIndent('  ')
-          .convert(jsonDecode(responseBody));
+      final prettyJson = const JsonEncoder.withIndent(
+        '  ',
+      ).convert(jsonDecode(responseBody));
       debugPrint(prettyJson);
     } catch (_) {
       debugPrint(responseBody);
@@ -176,11 +241,15 @@ class AnalyzeMenuClient {
       return baseUri.toString();
     }
 
-    return baseUri.replace(queryParameters: {
-      'departure_language': requestBody['departure_language'],
-      'arrival_language': requestBody['arrival_language'],
-      'menu_items': jsonEncode(requestBody['menu_items']),
-    }).toString();
+    return baseUri
+        .replace(
+          queryParameters: {
+            'departure_language': requestBody['departure_language'],
+            'arrival_language': requestBody['arrival_language'],
+            'menu_items': jsonEncode(requestBody['menu_items']),
+          },
+        )
+        .toString();
   }
 }
 
@@ -191,4 +260,18 @@ class AnalyzeMenuException implements Exception {
 
   @override
   String toString() => message;
+}
+
+class AnalyzeMenuRawExchange {
+  const AnalyzeMenuRawExchange({
+    required this.requestUrl,
+    required this.requestJson,
+    required this.statusCode,
+    required this.rawResponseBody,
+  });
+
+  final String requestUrl;
+  final String requestJson;
+  final int statusCode;
+  final String rawResponseBody;
 }

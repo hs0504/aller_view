@@ -1,29 +1,30 @@
-enum AllergyRisk {
-  danger,
-  caution,
-  safe,
-  unknown,
-}
+enum AllergyRisk { danger, caution, safe, unknown }
 
 extension AllergyRiskLabel on AllergyRisk {
   String get label => switch (this) {
-        AllergyRisk.danger => '위험',
-        AllergyRisk.caution => '주의',
-        AllergyRisk.safe => '안전',
-        AllergyRisk.unknown => '미확인',
-      };
+    AllergyRisk.danger => '위험',
+    AllergyRisk.caution => '주의',
+    AllergyRisk.safe => '안전',
+    AllergyRisk.unknown => '미확인',
+  };
 }
 
 class MenuRequestItem {
-  const MenuRequestItem({required this.itemId, required this.rawText});
+  const MenuRequestItem({
+    required this.itemId,
+    required this.rawText,
+    required this.vertices,
+  });
 
   final String itemId;
   final String rawText;
+  final List<Map<String, int>> vertices;
 
   Map<String, dynamic> toJson() => {
-        'item_id': itemId,
-        'raw_text': rawText,
-      };
+    'item_id': itemId,
+    'raw_text': rawText,
+    'vertices': vertices,
+  };
 }
 
 class RiskAnalyzedResult {
@@ -91,10 +92,7 @@ class AnalyzedMenuItem {
 }
 
 class RecommendedMenuItem {
-  const RecommendedMenuItem({
-    required this.itemId,
-    required this.koreanName,
-  });
+  const RecommendedMenuItem({required this.itemId, required this.koreanName});
 
   final String itemId;
   final String koreanName;

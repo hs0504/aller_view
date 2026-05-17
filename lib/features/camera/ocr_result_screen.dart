@@ -58,7 +58,7 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
       final preferenceScores = await UserPrefs.loadPreferenceScores();
       final userAllergies = UserPrefs.allergyNamesFromIndices(allergyIndices);
       final userPreferences = UserPrefs.preferenceScoresToEn(preferenceScores);
-      final lines = widget.ocrResult.lines;
+      final blocks = widget.ocrResult.blocks;
 
       await _waitForMinimum(stepOneStartedAt, _minimumStepOneDuration);
       if (!mounted) return;
@@ -71,18 +71,19 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
       final AnalyzeMenuResponse response;
 
       try {
-        response = await AnalyzeMenuClient.analyzeMenu(
-          lines,
-          departureLanguage: settings.departure,
-          arrivalLanguage: settings.arrival,
-          userAllergies: userAllergies,
-          userPreferences: userPreferences,
-        ).timeout(
-          _analysisTimeout,
-          onTimeout: () => throw const AnalyzeMenuException(
-            '\ubd84\uc11d \uc694\uccad\uc774 30\ucd08 \uc548\uc5d0 \uc644\ub8cc\ub418\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4. \uba54\uc778 \ud654\uba74\uc73c\ub85c \ub3cc\uc544\uac00 \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.',
-          ),
-        );
+        response =
+            await AnalyzeMenuClient.analyzeMenu(
+              blocks,
+              departureLanguage: settings.departure,
+              arrivalLanguage: settings.arrival,
+              userAllergies: userAllergies,
+              userPreferences: userPreferences,
+            ).timeout(
+              _analysisTimeout,
+              onTimeout: () => throw const AnalyzeMenuException(
+                '\ubd84\uc11d \uc694\uccad\uc774 30\ucd08 \uc548\uc5d0 \uc644\ub8cc\ub418\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4. \uba54\uc778 \ud654\uba74\uc73c\ub85c \ub3cc\uc544\uac00 \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.',
+              ),
+            );
       } catch (error) {
         if (!mounted) return;
         setState(() {
@@ -91,10 +92,7 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
         return;
       }
 
-      await _waitForMinimum(
-        stepTwoStartedAt,
-        _minimumStepTwoDuration,
-      );
+      await _waitForMinimum(stepTwoStartedAt, _minimumStepTwoDuration);
       if (!mounted) return;
 
       setState(() {
@@ -149,10 +147,7 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF121212),
-              Color(0xFF1E1E1E),
-            ],
+            colors: [Color(0xFF121212), Color(0xFF1E1E1E)],
           ),
         ),
         child: SafeArea(
@@ -166,8 +161,9 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
                     )
                   : _ErrorBody(
                       message: _errorMessage!,
-                      onPressed: () =>
-                          Navigator.of(context).popUntil((route) => route.isFirst),
+                      onPressed: () => Navigator.of(
+                        context,
+                      ).popUntil((route) => route.isFirst),
                     ),
             ),
           ),
@@ -178,10 +174,7 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
 }
 
 class _LoadingBody extends StatelessWidget {
-  const _LoadingBody({
-    required this.currentStep,
-    required this.statusMessage,
-  });
+  const _LoadingBody({required this.currentStep, required this.statusMessage});
 
   final int currentStep;
   final String statusMessage;
@@ -279,11 +272,7 @@ class _LoadingBody extends StatelessWidget {
   }
 }
 
-enum _StepState {
-  completed,
-  active,
-  pending,
-}
+enum _StepState { completed, active, pending }
 
 class _StepTile extends StatelessWidget {
   const _StepTile({
@@ -310,9 +299,7 @@ class _StepTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isActive ? accent : Colors.white10,
-        ),
+        border: Border.all(color: isActive ? accent : Colors.white10),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -323,12 +310,18 @@ class _StepTile extends StatelessWidget {
               width: 24,
               height: 24,
               decoration: BoxDecoration(
-                color: accent.withValues(alpha: isCompleted || isActive ? 0.18 : 0.12),
+                color: accent.withValues(
+                  alpha: isCompleted || isActive ? 0.18 : 0.12,
+                ),
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
               child: isCompleted
-                  ? const Icon(Icons.check_rounded, size: 15, color: Color(0xFF81C784))
+                  ? const Icon(
+                      Icons.check_rounded,
+                      size: 15,
+                      color: Color(0xFF81C784),
+                    )
                   : isActive
                   ? const SizedBox(
                       width: 12,
@@ -338,7 +331,11 @@ class _StepTile extends StatelessWidget {
                         color: Color(0xFFF06292),
                       ),
                     )
-                  : const Icon(Icons.more_horiz_rounded, size: 15, color: Colors.white38),
+                  : const Icon(
+                      Icons.more_horiz_rounded,
+                      size: 15,
+                      color: Colors.white38,
+                    ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -348,7 +345,9 @@ class _StepTile extends StatelessWidget {
                   Text(
                     label,
                     style: TextStyle(
-                      color: isActive || isCompleted ? Colors.white : Colors.white54,
+                      color: isActive || isCompleted
+                          ? Colors.white
+                          : Colors.white54,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -373,10 +372,7 @@ class _StepTile extends StatelessWidget {
 }
 
 class _ErrorBody extends StatelessWidget {
-  const _ErrorBody({
-    required this.message,
-    required this.onPressed,
-  });
+  const _ErrorBody({required this.message, required this.onPressed});
 
   final String message;
   final VoidCallback onPressed;

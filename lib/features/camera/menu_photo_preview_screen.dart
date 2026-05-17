@@ -1,9 +1,13 @@
+import 'dart:convert';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/api/analyze_menu_client.dart';
 import '../../core/ocr/ocr_result.dart';
 import '../../core/ocr/vision_api_client.dart';
+import '../../core/storage/user_prefs.dart';
 import 'menu_image_normalizer.dart';
 import 'ocr_result_screen.dart';
 import 'photo_quality_analyzer.dart';
@@ -22,6 +26,9 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
 
   late final Future<_PreviewData> _previewDataFuture;
   bool _isAnalyzing = false;
+  bool _isTestingApi = false;
+
+  bool get _isBusy => _isAnalyzing || _isTestingApi;
 
   @override
   void initState() {
@@ -81,6 +88,52 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
     }
   }
 
+  Future<void> _startApiJsonTest(Uint8List imageBytes) async {
+    setState(() => _isTestingApi = true);
+    final startedAt = DateTime.now();
+
+    try {
+      final OcrResult result = await VisionApiClient.extractText(imageBytes);
+      final settings = await UserPrefs.loadLanguageSettings();
+      final allergyIndices = await UserPrefs.loadAllergyIndices();
+      final preferenceScores = await UserPrefs.loadPreferenceScores();
+      final userAllergies = UserPrefs.allergyNamesFromIndices(allergyIndices);
+      final userPreferences = UserPrefs.preferenceScoresToEn(preferenceScores);
+
+      final exchange = await AnalyzeMenuClient.analyzeMenuRaw(
+        result.blocks,
+        departureLanguage: settings.departure,
+        arrivalLanguage: settings.arrival,
+        userAllergies: userAllergies,
+        userPreferences: userPreferences,
+      );
+
+      if (!mounted) return;
+      await _waitForMinimum(startedAt, _minimumProcessingOverlayDuration);
+      if (!mounted) return;
+
+      await showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (_) => _ApiJsonTestSheet(exchange: exchange),
+      );
+    } on VisionApiException catch (e) {
+      if (!mounted) return;
+      _showError(e.message);
+    } on AnalyzeMenuException catch (e) {
+      if (!mounted) return;
+      _showError(e.message);
+    } catch (e) {
+      if (!mounted) return;
+      _showError('JSON 테스트 중 오류가 발생했습니다. $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isTestingApi = false);
+      }
+    }
+  }
+
   Future<void> _waitForMinimum(DateTime startedAt, Duration minimum) async {
     final elapsed = DateTime.now().difference(startedAt);
     final remaining = minimum - elapsed;
@@ -91,10 +144,7 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red.shade700,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red.shade700),
     );
   }
 
@@ -133,7 +183,9 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: _isAnalyzing ? null : () => Navigator.pop(context),
+                        onPressed: _isBusy
+                            ? null
+                            : () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           side: const BorderSide(color: Colors.white70),
@@ -147,8 +199,45 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: quality.isTooBlurry || _isBusy
+                            ? null
+                            : () async {
+                                await HapticFeedback.selectionClick();
+                                if (!mounted) return;
+                                await _startApiJsonTest(preview.bytes);
+                              },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFFFD1DE),
+                          disabledForegroundColor: Colors.white38,
+                          side: const BorderSide(color: Color(0xFFFF8FB1)),
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        icon: _isTestingApi
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  color: Color(0xFFFFD1DE),
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.data_object_rounded, size: 18),
+                        label: const Text(
+                          'JSON 테스트',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
                       child: ElevatedButton(
-                        onPressed: quality.isTooBlurry || _isAnalyzing
+                        onPressed: quality.isTooBlurry || _isBusy
                             ? null
                             : () async {
                                 await HapticFeedback.selectionClick();
@@ -184,9 +273,9 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
                   ],
                 ),
               ),
-              if (_isAnalyzing)
-                const Positioned.fill(
-                  child: _ProcessingOverlay(),
+              if (_isBusy)
+                Positioned.fill(
+                  child: _ProcessingOverlay(isTestingApi: _isTestingApi),
                 ),
             ],
           );
@@ -263,14 +352,14 @@ class _QualityBanner extends StatelessWidget {
 }
 
 class _ProcessingOverlay extends StatelessWidget {
-  const _ProcessingOverlay();
+  const _ProcessingOverlay({required this.isTestingApi});
+
+  final bool isTestingApi;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.56),
-      ),
+      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.56)),
       child: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -326,7 +415,10 @@ class _ProcessingOverlay extends StatelessWidget {
                     ),
                     const SizedBox(height: 18),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(999),
@@ -334,7 +426,11 @@ class _ProcessingOverlay extends StatelessWidget {
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.document_scanner_outlined, color: Color(0xFFF06292), size: 16),
+                          Icon(
+                            Icons.document_scanner_outlined,
+                            color: Color(0xFFF06292),
+                            size: 16,
+                          ),
                           SizedBox(width: 8),
                           Text(
                             '텍스트 추출 중',
@@ -370,4 +466,175 @@ class _PreviewData {
   final PhotoQualityResult quality;
   final double imageWidth;
   final double imageHeight;
+}
+
+class _ApiJsonTestSheet extends StatelessWidget {
+  const _ApiJsonTestSheet({required this.exchange});
+
+  final AnalyzeMenuRawExchange exchange;
+
+  String get _prettyResponse {
+    try {
+      return const JsonEncoder.withIndent(
+        '  ',
+      ).convert(jsonDecode(exchange.rawResponseBody));
+    } catch (_) {
+      return exchange.rawResponseBody.isEmpty
+          ? '(empty response body)'
+          : exchange.rawResponseBody;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isSuccess = exchange.statusCode >= 200 && exchange.statusCode < 300;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.82,
+      minChildSize: 0.45,
+      maxChildSize: 0.96,
+      builder: (_, scrollController) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        ),
+        child: ListView(
+          controller: scrollController,
+          padding: EdgeInsets.fromLTRB(
+            16,
+            12,
+            16,
+            16 + MediaQuery.paddingOf(context).bottom,
+          ),
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'AI 서버 JSON 테스트',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        (isSuccess
+                                ? const Color(0xFF43A047)
+                                : const Color(0xFFE53935))
+                            .withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    'HTTP ${exchange.statusCode}',
+                    style: TextStyle(
+                      color: isSuccess
+                          ? const Color(0xFF81C784)
+                          : const Color(0xFFFF8A80),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _JsonDebugSection(title: '요청 URL', text: exchange.requestUrl),
+            const SizedBox(height: 14),
+            _JsonDebugSection(title: '요청 JSON', text: exchange.requestJson),
+            const SizedBox(height: 14),
+            _JsonDebugSection(title: '응답 JSON', text: _prettyResponse),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _JsonDebugSection extends StatelessWidget {
+  const _JsonDebugSection({required this.title, required this.text});
+
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF2B2B2B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: text));
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('복사되었습니다'),
+                        duration: Duration(seconds: 1),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.copy_rounded,
+                    color: Colors.white70,
+                    size: 18,
+                  ),
+                  tooltip: '복사',
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SelectableText(
+              text,
+              style: const TextStyle(
+                color: Color(0xFFB5CEA8),
+                fontSize: 12,
+                height: 1.55,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
