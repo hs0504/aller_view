@@ -33,6 +33,7 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
   static const _analysisTimeout = Duration(seconds: 30);
 
   String? _errorMessage;
+  bool _returnToCameraOnError = false;
   int _currentStep = 1;
   String _statusMessage = '추출된 텍스트와 사용자 설정을 정리하고 있습니다.';
 
@@ -88,6 +89,8 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
         if (!mounted) return;
         setState(() {
           _errorMessage = _errorMessageFrom(error);
+          _returnToCameraOnError =
+              error is AnalyzeMenuException && error.returnToCamera;
         });
         return;
       }
@@ -120,6 +123,7 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
       if (!mounted) return;
       setState(() {
         _errorMessage = '분석을 준비하는 중 문제가 발생했습니다. 이전 화면으로 돌아가 다시 시도해 주세요.';
+        _returnToCameraOnError = false;
       });
     }
   }
@@ -137,6 +141,20 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
       return error.message;
     }
     return error.toString();
+  }
+
+  void _handleErrorAction() {
+    final navigator = Navigator.of(context);
+    if (_returnToCameraOnError) {
+      var pops = 0;
+      navigator.popUntil((route) {
+        pops++;
+        return pops > 2 || route.isFirst;
+      });
+      return;
+    }
+
+    navigator.popUntil((route) => route.isFirst);
   }
 
   @override
@@ -161,9 +179,8 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
                     )
                   : _ErrorBody(
                       message: _errorMessage!,
-                      onPressed: () => Navigator.of(
-                        context,
-                      ).popUntil((route) => route.isFirst),
+                      buttonLabel: _returnToCameraOnError ? '다시 촬영' : '이전 화면으로',
+                      onPressed: _handleErrorAction,
                     ),
             ),
           ),
@@ -372,9 +389,14 @@ class _StepTile extends StatelessWidget {
 }
 
 class _ErrorBody extends StatelessWidget {
-  const _ErrorBody({required this.message, required this.onPressed});
+  const _ErrorBody({
+    required this.message,
+    required this.buttonLabel,
+    required this.onPressed,
+  });
 
   final String message;
+  final String buttonLabel;
   final VoidCallback onPressed;
 
   @override
@@ -415,7 +437,7 @@ class _ErrorBody extends StatelessWidget {
                   side: const BorderSide(color: Colors.white54),
                   minimumSize: const Size(160, 48),
                 ),
-                child: const Text('이전 화면으로'),
+                child: Text(buttonLabel),
               ),
             ],
           ),

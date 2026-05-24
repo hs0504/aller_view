@@ -16,6 +16,8 @@ class MenuDetail {
     required this.calorieMin,
     required this.calorieMax,
     required this.imageUrl,
+    required this.description,
+    required this.ingredients,
   });
 
   final int dishId;
@@ -23,6 +25,8 @@ class MenuDetail {
   final int? calorieMin;
   final int? calorieMax;
   final String? imageUrl;
+  final String? description;
+  final List<String> ingredients;
 
   bool get hasImage => imageUrl != null && imageUrl!.trim().isNotEmpty;
 
@@ -49,6 +53,10 @@ class MenuDetail {
       calorieMin: (json['calorie_min'] as num?)?.toInt(),
       calorieMax: (json['calorie_max'] as num?)?.toInt(),
       imageUrl: json['image_url'] as String?,
+      description: json['description'] as String?,
+      ingredients: (json['ingredients'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(),
     );
   }
 }
@@ -57,7 +65,8 @@ class MenuDetailClient {
   MenuDetailClient._();
 
   static final DioClient _dioClient = DioClient();
-  static const _path = '/menu/details';
+  static const _path =
+      'https://allerview-729003075709.asia-northeast3.run.app/menu/details';
 
   static Future<List<MenuDetail>> fetchMenuDetails(List<int> dishIds) async {
     final normalizedIds = dishIds.toSet().toList();
@@ -67,9 +76,7 @@ class MenuDetailClient {
 
     final response = await _dioClient.post(
       _path,
-      data: {
-        'dish_ids': normalizedIds,
-      },
+      data: {'dish_ids': normalizedIds},
     );
 
     if (response == null) {

@@ -56,16 +56,24 @@ class UserPrefs {
 
   static const Map<String, String> _preferenceKeyToEn = {
     '매운맛': 'spicy',
-    '짠맛':  'salty',
-    '단맛':  'sweet',
-    '육식':  'meat',
+    '짠맛': 'salty',
+    '단맛': 'sweet',
+    '육식': 'meat',
     '해산물': 'seafood',
-    '채식':  'vegetarian',
+    '채식': 'vegetarian',
+  };
+  static const Map<String, int> _defaultPreferenceScoresEn = {
+    'spicy': 0,
+    'salty': 0,
+    'sweet': 0,
+    'meat': 0,
+    'seafood': 0,
+    'vegetarian': 0,
   };
 
   /// 저장된 한국어 key를 영문 snake_case로 변환하여 반환합니다.
   static Map<String, int> preferenceScoresToEn(Map<String, int> scores) {
-    final result = <String, int>{};
+    final result = Map<String, int>.from(_defaultPreferenceScoresEn);
     scores.forEach((ko, score) {
       final en = _preferenceKeyToEn[ko];
       if (en != null) result[en] = score;
@@ -118,8 +126,8 @@ class UserPrefs {
     await prefs.setString(_keyArrivalLanguage, normalized.arrival);
   }
 
-  static Future<({String departure, String arrival})> loadLanguageSettings()
-      async {
+  static Future<({String departure, String arrival})>
+  loadLanguageSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final normalized = _normalizeLanguageSettings(
       departureLanguage: prefs.getString(_keyDepartureLanguage) ?? 'ja',
@@ -153,15 +161,14 @@ class UserPrefs {
         : arrivalLanguageOptions.first.code;
 
     if (departure == arrival) {
-      arrival = arrivalLanguageOptions.firstWhere(
-        (option) => option.code != departure,
-        orElse: () => arrivalLanguageOptions.first,
-      ).code;
+      arrival = arrivalLanguageOptions
+          .firstWhere(
+            (option) => option.code != departure,
+            orElse: () => arrivalLanguageOptions.first,
+          )
+          .code;
     }
 
-    return (
-      departure: departure,
-      arrival: arrival,
-    );
+    return (departure: departure, arrival: arrival);
   }
 }

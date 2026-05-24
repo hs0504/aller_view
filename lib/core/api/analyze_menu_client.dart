@@ -17,12 +17,20 @@ class AnalyzeMenuClient {
   static const String _endpoint = '/api/analyze-menu';
   static const AnalyzeMenuRequestMethod _requestMethod =
       AnalyzeMenuRequestMethod.post;
+  static const Map<String, int> _defaultUserPreferences = {
+    'spicy': 0,
+    'salty': 0,
+    'sweet': 0,
+    'meat': 0,
+    'seafood': 0,
+    'vegetarian': 0,
+  };
 
   static List<MenuRequestItem> buildMenuItems(List<OcrTextBlock> blocks) {
     return blocks
         .map(
           (block) => MenuRequestItem(
-            itemId: block.itemId,
+            boxId: block.itemId,
             rawText: block.rawText,
             vertices: block.boundingBox.vertices
                 .map(
@@ -54,7 +62,7 @@ class AnalyzeMenuClient {
       'departure_language': departureLanguage,
       'arrival_language': arrivalLanguage,
       'user_allergies': userAllergies,
-      'user_preferences': userPreferences,
+      'user_preferences': _normalizeUserPreferences(userPreferences),
       'menu_items': menuItems.map((e) => e.toJson()).toList(),
     };
   }
@@ -222,13 +230,23 @@ class AnalyzeMenuClient {
 
     try {
       final body = jsonDecode(responseBody) as Map<String, dynamic>;
-      return AnalyzeMenuResponse.fromJson(
+      final parsedResponse = AnalyzeMenuResponse.fromJson(
         body,
         requestUrl: requestUrl,
         requestJson: requestJson,
         rawResponseBody: responseBody,
       );
+      if (!parsedResponse.isSuccess) {
+        final message = parsedResponse.errorMessage ?? '메뉴 분석에 실패했습니다.';
+        final code = parsedResponse.errorCode;
+        throw AnalyzeMenuException(
+          code == null ? message : '$message ($code)',
+          returnToCamera: true,
+        );
+      }
+      return parsedResponse;
     } catch (e) {
+      if (e is AnalyzeMenuException) rethrow;
       debugPrint('[AnalyzeMenu] 응답 파싱 오류: $e');
       throw const AnalyzeMenuException('응답 형식이 올바르지 않습니다.');
     }
@@ -246,17 +264,29 @@ class AnalyzeMenuClient {
           queryParameters: {
             'departure_language': requestBody['departure_language'],
             'arrival_language': requestBody['arrival_language'],
+            'user_allergies': jsonEncode(requestBody['user_allergies']),
+            'user_preferences': jsonEncode(requestBody['user_preferences']),
             'menu_items': jsonEncode(requestBody['menu_items']),
           },
         )
         .toString();
   }
+
+  static Map<String, int> _normalizeUserPreferences(
+    Map<String, int> userPreferences,
+  ) {
+    return {
+      for (final entry in _defaultUserPreferences.entries)
+        entry.key: userPreferences[entry.key] ?? entry.value,
+    };
+  }
 }
 
 class AnalyzeMenuException implements Exception {
-  const AnalyzeMenuException(this.message);
+  const AnalyzeMenuException(this.message, {this.returnToCamera = false});
 
   final String message;
+  final bool returnToCamera;
 
   @override
   String toString() => message;
