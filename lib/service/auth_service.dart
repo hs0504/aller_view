@@ -151,7 +151,7 @@ class AuthService {
 
       if (response == null) return AuthResult.networkError();
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.data as Map<String, dynamic>;
         // Supabase 토큰을 access_token으로 저장 (이후 API 호출에 사용)
         await _storage.write(key: _keyAccessToken, value: supabaseToken);
@@ -165,6 +165,24 @@ class AuthService {
     } catch (e) {
       if (kDebugMode) print('Social complete error: $e');
       return AuthResult.networkError();
+    }
+  }
+
+  // 알레르기/선호 식재료/아바타 프로필 서버 동기화
+  Future<void> updateProfile({
+    required List<String> allergies,
+    String? avatarUrl,
+  }) async {
+    try {
+      await _dioClient.put(
+        '/users/me/profile',
+        data: {
+          'allergies': allergies,
+          if (avatarUrl != null) 'avatar_url': avatarUrl,
+        },
+      );
+    } catch (e) {
+      if (kDebugMode) print('updateProfile error: $e');
     }
   }
 

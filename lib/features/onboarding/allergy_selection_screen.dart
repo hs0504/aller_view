@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/data/allergy_data.dart';
 import '../../core/storage/user_prefs.dart';
+import '../../service/auth_service.dart';
 import 'preference_selection_screen.dart';
 
 class AllergySelectionScreen extends StatefulWidget {
@@ -17,7 +18,9 @@ class AllergySelectionScreen extends StatefulWidget {
 class _AllergySelectionScreenState extends State<AllergySelectionScreen> {
   final Set<int> selectedItems = {};
   final Map<int, double> scaleValues = {};
+  final AuthService _authService = AuthService();
   bool _isLoading = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -36,10 +39,23 @@ class _AllergySelectionScreenState extends State<AllergySelectionScreen> {
   }
 
   Future<void> _onComplete() async {
-    await UserPrefs.saveAllergyIndices(selectedItems);
-    await UserPrefs.saveAllergyIds(
-      selectedItems.map((i) => i + 1).toList(),
-    );
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      await UserPrefs.saveAllergyIndices(selectedItems);
+      await UserPrefs.saveAllergyIds(
+        selectedItems.map((i) => i + 1).toList(),
+      );
+
+      final allergyNames =
+          selectedItems.map((i) => allergyItems[i]['name']!).toList();
+      final isLoggedIn = await _authService.isLoggedIn();
+      if (isLoggedIn) {
+        await _authService.updateProfile(allergies: allergyNames);
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
 
     if (!mounted) return;
 
@@ -221,7 +237,9 @@ class _AllergySelectionScreenState extends State<AllergySelectionScreen> {
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: selectedItems.isEmpty ? null : _onComplete,
+                      onPressed: (selectedItems.isEmpty || _isSaving)
+                          ? null
+                          : _onComplete,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFF06292),
                         disabledBackgroundColor: Colors.grey[300],
@@ -231,18 +249,27 @@ class _AllergySelectionScreenState extends State<AllergySelectionScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: Text(
-                        selectedItems.isEmpty
-                            ? '1가지 이상의 항목을 선택해주세요'
-                            : widget.isEditMode
-                            ? '수정 완료 (${selectedItems.length}개 항목)'
-                            : '선택 완료 (${selectedItems.length}개 항목)',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              selectedItems.isEmpty
+                                  ? '1가지 이상의 항목을 선택해주세요'
+                                  : widget.isEditMode
+                                      ? '수정 완료 (${selectedItems.length}개 항목)'
+                                      : '선택 완료 (${selectedItems.length}개 항목)',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
                     ),
                   ),
                 ),

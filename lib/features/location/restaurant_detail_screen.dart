@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../core/data/allergy_data.dart';
 import '../../core/network/dio_client.dart';
@@ -287,6 +288,7 @@ class _ReviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final username = review['username'] as String? ?? '익명';
+    final avatarUrl = review['avatar_url'] as String?;
     final content = review['content'] as String?;
     final menuItems = (review['menu_items'] as List<dynamic>?) ?? [];
     final reviewAllergies =
@@ -304,8 +306,8 @@ class _ReviewCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Icon(Icons.person, size: 16, color: Colors.grey),
-              const SizedBox(width: 4),
+              _AvatarIcon(url: avatarUrl),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   username,
@@ -428,6 +430,28 @@ class _ReviewCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _AvatarIcon extends StatelessWidget {
+  const _AvatarIcon({required this.url});
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    if (url == null) {
+      return const Icon(Icons.person, size: 28, color: Colors.grey);
+    }
+    return ClipOval(
+      child: SvgPicture.network(
+        url!,
+        width: 28,
+        height: 28,
+        fit: BoxFit.cover,
+        placeholderBuilder: (_) =>
+            const Icon(Icons.person, size: 28, color: Colors.grey),
       ),
     );
   }

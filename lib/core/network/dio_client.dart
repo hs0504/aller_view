@@ -7,6 +7,7 @@ class DioClient {
 
   static const _storage = FlutterSecureStorage();
   final String _baseUrl = 'https://allerview-729003075709.asia-northeast3.run.app';
+  // final String _baseUrl = 'http://10.184.144.46:8080';
 
   /// 토큰이 완전히 만료되어 재로그인이 필요할 때 호출되는 콜백
   /// main.dart 또는 최상위 위젯에서 네비게이터 이동 로직을 등록해두면 됨

@@ -50,8 +50,10 @@ dependencies:
   retrofit: ^4.0.3
   json_annotation: ^4.8.1
   supabase_flutter: ^2.12.2
+  google_sign_in: ^6.2.1
   shared_preferences: ^2.5.5
   flutter_secure_storage: ^10.0.0
+  flutter_svg: ^2.0.10+1
 
 dev_dependencies:
   flutter_test:

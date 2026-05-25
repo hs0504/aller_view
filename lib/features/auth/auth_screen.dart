@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/storage/user_prefs.dart';
@@ -98,11 +99,24 @@ class _AuthScreenState extends State<AuthScreen>
   Future<void> _onGoogleSignIn() async {
     setState(() => _isLoading = true);
     try {
-      await Supabase.instance.client.auth.signInWithOAuth(
-        OAuthProvider.google,
+      final googleSignIn = GoogleSignIn(
+        serverClientId: '729003075709-d7qouooo2jg7bjgol5m0p5ejkvf4i78d.apps.googleusercontent.com',
       );
+      final account = await googleSignIn.signIn();
+      if (account == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+      final auth = await account.authentication;
+
+      await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: auth.idToken!,
+        accessToken: auth.accessToken,
+      );
+
       final session = Supabase.instance.client.auth.currentSession;
-      if (session == null) {
+      if (session == null || !mounted) {
         setState(() => _isLoading = false);
         return;
       }
@@ -209,8 +223,8 @@ class _AuthScreenState extends State<AuthScreen>
                 unselectedLabelColor: Colors.grey,
                 labelStyle: const TextStyle(fontWeight: FontWeight.w600),
                 tabs: const [
-                  Tab(text: "이메일"),
                   Tab(text: "Google"),
+                  Tab(text: "이메일"),
                 ],
               ),
             ),
@@ -218,8 +232,8 @@ class _AuthScreenState extends State<AuthScreen>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildEmailTab(),
                   _buildGoogleTab(),
+                  _buildEmailTab(),
                 ],
               ),
             ),

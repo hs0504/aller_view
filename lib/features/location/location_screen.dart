@@ -31,12 +31,22 @@ class _LocationScreenState extends State<LocationScreen> {
   final PanelController _panelController = PanelController();
   _SortMode _sortMode = _SortMode.mostReviewed;
   bool _hasAllergySettings = false;
+  bool _isSearchMode = false;
+  bool _isSearchLoading = false;
+  List<dynamic> _nearbyRestaurants = [];
+  Timer? _debounceTimer;
 
   @override
   void initState() {
     super.initState();
     _loadAllergySettings();
     _checkPermissionAndFetchLocation();
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadAllergySettings() async {
@@ -107,6 +117,7 @@ class _LocationScreenState extends State<LocationScreen> {
               'safe_count': restaurant['safe_count'],
             };
           }).toList();
+          _nearbyRestaurants = List.from(_restaurants);
         });
       }
     } catch (e) {
@@ -118,6 +129,62 @@ class _LocationScreenState extends State<LocationScreen> {
     controller.animateCamera(
       CameraUpdate.newLatLngZoom(_currentPosition, 16),
     );
+  }
+
+  Future<void> _fetchSearchResults(String query) async {
+    setState(() => _isSearchLoading = true);
+    try {
+      final allergyIds = await UserPrefs.loadAllergyIds();
+      final response = await _dioClient.get(
+        '/restaurants/search',
+        queryParams: {
+          'q': query,
+          'lat': _currentPosition.latitude,
+          'lng': _currentPosition.longitude,
+          if (allergyIds.isNotEmpty) 'allergy_ids': allergyIds.join(','),
+        },
+      );
+      if (response != null && response.statusCode == 200) {
+        final List<dynamic> data = response.data;
+        if (mounted) {
+          setState(() {
+            _restaurants = data.map((r) => {
+              'id': r['place_id'] ?? 'unknown_id',
+              'name': r['name'] ?? 'Unknown',
+              'address': r['address'] ?? '주소 정보 없음',
+              'latitude': (r['latitude'] ?? 0.0).toDouble(),
+              'longitude': (r['longitude'] ?? 0.0).toDouble(),
+              'type': r['business_type'] ?? '기타',
+              'positive_count': r['positive_count'] ?? 0,
+              'negative_count': r['negative_count'] ?? 0,
+              'safe_count': r['safe_count'],
+            }).toList();
+            _isSearchMode = true;
+            _isSearchLoading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isSearchLoading = false);
+      }
+    } catch (e) {
+      if (kDebugMode) print('Search error: $e');
+      if (mounted) setState(() => _isSearchLoading = false);
+    }
+  }
+
+  IconData _iconForType(String type) {
+    final t = type.toLowerCase();
+    if (t.contains('카페') || t.contains('커피') || t.contains('cafe')) return Icons.local_cafe;
+    if (t.contains('베이커리') || t.contains('빵') || t.contains('bakery')) return Icons.bakery_dining;
+    if (t.contains('피자')) return Icons.local_pizza;
+    if (t.contains('치킨') || t.contains('닭')) return Icons.set_meal;
+    if (t.contains('라멘') || t.contains('일식') || t.contains('초밥') || t.contains('스시') || t.contains('중국 음식점')) return Icons.ramen_dining;
+    if (t.contains('편의점') || t.contains('마트')) return Icons.store;
+    if (t.contains('패스트푸드') || t.contains('햄버거') || t.contains('버거')) return Icons.fastfood;
+    if (t.contains('한식당')) return Icons.rice_bowl;
+    if (t.contains('바') || t.contains('이자카야') || t.contains('주점')) return Icons.local_bar;
+    if (t.contains('분식') || t.contains('김밥')) return Icons.rice_bowl;
+    return Icons.restaurant;
   }
 
   Set<Marker> _buildMarkers() {
@@ -152,7 +219,7 @@ class _LocationScreenState extends State<LocationScreen> {
     const double panelMinHeight = 160;
     const double mapBottomOffset = panelMinHeight + 80;
     final double panelMaxHeight =
-        MediaQuery.of(context).size.height - mapBottomOffset;
+        MediaQuery.of(context).size.height * 0.6;
 
     // 1. 지도와 검색창을 포함하는 body 부분을 별도 변수로 추출
     final mapBody = Stack(
@@ -160,7 +227,7 @@ class _LocationScreenState extends State<LocationScreen> {
       children: [
         Positioned(
           top: 0,
-          bottom: panelMinHeight + 80,
+          bottom: mapBottomOffset,
           left: 0,
           right: 0,
           child: GoogleMap(
@@ -171,6 +238,7 @@ class _LocationScreenState extends State<LocationScreen> {
             myLocationEnabled: true,
             markers: _buildMarkers(),
             mapType: MapType.normal,
+            padding: const EdgeInsets.only(top: 60),
             onMapCreated: (GoogleMapController controller) {
               if (!_controllerCompleter.isCompleted) {
                 _controllerCompleter.complete(controller);
@@ -196,9 +264,20 @@ class _LocationScreenState extends State<LocationScreen> {
                 Expanded(
                   child: TextField(
                     onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                      });
+                      setState(() => _searchQuery = value);
+                      _debounceTimer?.cancel();
+                      if (value.trim().isEmpty) {
+                        setState(() {
+                          _restaurants = _nearbyRestaurants;
+                          _isSearchMode = false;
+                          _isSearchLoading = false;
+                        });
+                      } else {
+                        _debounceTimer = Timer(
+                          const Duration(milliseconds: 500),
+                          () => _fetchSearchResults(value.trim()),
+                        );
+                      }
                     },
                     style: const TextStyle(fontSize: 16),
                     decoration: InputDecoration(
@@ -289,7 +368,9 @@ class _LocationScreenState extends State<LocationScreen> {
           child: Row(
             children: [
               Text(
-                "주변 식당 ${sorted.length}곳",
+                _isSearchMode
+                    ? '검색 결과 ${sorted.length}곳'
+                    : '주변 식당 ${sorted.length}곳',
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
@@ -320,9 +401,15 @@ class _LocationScreenState extends State<LocationScreen> {
           ),
         ),
         Expanded(
-          child: sorted.isEmpty
-              ? const Center(child: Text("근처 식당 정보를 불러오는 중..."))
-              : ListView.builder(
+          child: _isSearchLoading
+              ? const Center(child: CircularProgressIndicator())
+              : sorted.isEmpty
+                  ? Center(
+                      child: Text(
+                        _isSearchMode ? '검색 결과가 없습니다' : '근처 식당 정보를 불러오는 중...',
+                      ),
+                    )
+                  : ListView.builder(
             itemCount: sorted.length,
             itemBuilder: (context, index) {
               final r = sorted[index];
@@ -358,7 +445,7 @@ class _LocationScreenState extends State<LocationScreen> {
                   child: Row(
                     children: [
                       Icon(
-                        Icons.restaurant,
+                        _iconForType(r['type'] as String),
                         size: 32,
                         color: Colors.pink[300],
                       ),
