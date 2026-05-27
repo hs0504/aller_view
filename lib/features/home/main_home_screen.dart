@@ -9,6 +9,7 @@ import '../camera/menu_camera_screen.dart';
 import '../location/location_screen.dart';
 import '../onboarding/allergy_selection_screen.dart';
 import '../onboarding/preference_selection_screen.dart';
+import '../profile/profile_screen.dart';
 import '../settings/language_setting_screen.dart';
 
 class MainHomeScreen extends StatefulWidget {
@@ -19,6 +20,7 @@ class MainHomeScreen extends StatefulWidget {
 }
 
 class _MainHomeScreenState extends State<MainHomeScreen> {
+  int _currentIndex = 0;
   List<int> _allergyIndices = [];
   String _departureLanguage = 'ja';
   String _arrivalLanguage = 'ko';
@@ -247,7 +249,18 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       bottomNavigationBar: BottomNavigationBar(
         selectedItemColor: const Color(0xFFF06292),
         unselectedItemColor: Colors.grey,
-        currentIndex: 0,
+        currentIndex: _currentIndex,
+        onTap: (i) {
+          if (i == 1) {
+            setState(() => _currentIndex = 1);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            ).then((_) => setState(() => _currentIndex = 0));
+          } else {
+            setState(() => _currentIndex = i);
+          }
+        },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: '\ud648'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: '\ub0b4\u0020\uc815\ubcf4'),

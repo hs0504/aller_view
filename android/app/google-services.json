@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "729003075709",
+    "project_id": "allerv",
+    "storage_bucket": "allerv.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:729003075709:android:31be0e4164d0c402a52914",
+        "android_client_info": {
+          "package_name": "com.example.aller_view"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "729003075709-d7qouooo2jg7bjgol5m0p5ejkvf4i78d.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD3_H16Zbr7mL8BTOhMHDEE4L3lWun_SUM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "729003075709-d7qouooo2jg7bjgol5m0p5ejkvf4i78d.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
