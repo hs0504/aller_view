@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/api/analyze_menu_client.dart';
 import '../../core/api/analyze_menu_result.dart';
 import '../../core/ocr/ocr_result.dart';
+import '../../core/ocr/vision_api_client.dart';
 import '../../core/storage/user_prefs.dart';
 import 'overlay_result_screen.dart';
 
@@ -14,28 +15,30 @@ class OcrResultScreen extends StatefulWidget {
     required this.imageBytes,
     required this.imageWidth,
     required this.imageHeight,
-    required this.ocrResult,
+    this.previewOnly = false,
   });
 
   final Uint8List imageBytes;
   final double imageWidth;
   final double imageHeight;
-  final OcrResult ocrResult;
+  final bool previewOnly;
 
   @override
   State<OcrResultScreen> createState() => _OcrResultScreenState();
 }
 
 class _OcrResultScreenState extends State<OcrResultScreen> {
-  static const _minimumStepOneDuration = Duration(milliseconds: 850);
-  static const _minimumStepTwoDuration = Duration(milliseconds: 1200);
-  static const _minimumStepThreeDuration = Duration(milliseconds: 800);
+  static const _minimumStepOneDuration = Duration(milliseconds: 600);
+  static const _minimumStepTwoDuration = Duration(milliseconds: 850);
+  static const _minimumStepThreeDuration = Duration(milliseconds: 1200);
+  static const _minimumStepFourDuration = Duration(milliseconds: 700);
   static const _analysisTimeout = Duration(seconds: 30);
 
   String? _errorMessage;
   bool _returnToCameraOnError = false;
+  bool _isPreviewComplete = false;
   int _currentStep = 1;
-  String _statusMessage = '추출된 텍스트와 사용자 설정을 정리하고 있습니다.';
+  String _statusMessage = '촬영한 이미지를 선명하게 정리하고 있어요.';
 
   @override
   void initState() {
@@ -44,30 +47,57 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
   }
 
   Future<void> _startFlow() async {
-    final stepOneStartedAt = DateTime.now();
-
-    if (widget.ocrResult.isEmpty) {
-      setState(() {
-        _errorMessage = '텍스트를 인식하지 못했습니다. 메뉴가 잘 보이도록 다시 촬영해 주세요.';
-      });
+    if (widget.previewOnly) {
+      await _startPreviewFlow();
       return;
     }
 
+    final stepOneStartedAt = DateTime.now();
+
     try {
+      await _waitForMinimum(stepOneStartedAt, _minimumStepOneDuration);
+      if (!mounted) return;
+      setState(() {
+        _currentStep = 2;
+        _statusMessage = '사진 속 메뉴 이름과 설명을 읽고 있어요.';
+      });
+
+      final stepTwoStartedAt = DateTime.now();
+      final OcrResult ocrResult;
+      try {
+        ocrResult = await VisionApiClient.extractText(widget.imageBytes);
+      } on VisionApiException catch (error) {
+        if (!mounted) return;
+        setState(() {
+          _errorMessage = error.message;
+          _returnToCameraOnError = true;
+        });
+        return;
+      }
+
+      if (ocrResult.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _errorMessage = '텍스트를 인식하지 못했습니다. 메뉴가 잘 보이도록 다시 촬영해 주세요.';
+          _returnToCameraOnError = true;
+        });
+        return;
+      }
+
       final settings = await UserPrefs.loadLanguageSettings();
       final allergyIndices = await UserPrefs.loadAllergyIndices();
       final preferenceScores = await UserPrefs.loadPreferenceScores();
       final userAllergies = UserPrefs.allergyNamesFromIndices(allergyIndices);
       final userPreferences = UserPrefs.preferenceScoresToEn(preferenceScores);
-      final blocks = widget.ocrResult.blocks;
+      final blocks = ocrResult.blocks;
 
-      await _waitForMinimum(stepOneStartedAt, _minimumStepOneDuration);
+      await _waitForMinimum(stepTwoStartedAt, _minimumStepTwoDuration);
       if (!mounted) return;
       setState(() {
-        _currentStep = 2;
-        _statusMessage = '추천 메뉴와 알레르기 위험 분석을 요청하고 있습니다.';
+        _currentStep = 3;
+        _statusMessage = '알레르기와 취향 설정을 반영하고 있어요.';
       });
-      final stepTwoStartedAt = DateTime.now();
+      final stepThreeStartedAt = DateTime.now();
 
       final AnalyzeMenuResponse response;
 
@@ -95,16 +125,16 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
         return;
       }
 
-      await _waitForMinimum(stepTwoStartedAt, _minimumStepTwoDuration);
+      await _waitForMinimum(stepThreeStartedAt, _minimumStepThreeDuration);
       if (!mounted) return;
 
       setState(() {
-        _currentStep = 3;
-        _statusMessage = '오버레이 화면을 준비하고 있습니다.';
+        _currentStep = 4;
+        _statusMessage = '메뉴판 위에 분석 결과를 배치하고 있어요.';
       });
 
-      final stepThreeStartedAt = DateTime.now();
-      await _waitForMinimum(stepThreeStartedAt, _minimumStepThreeDuration);
+      final stepFourStartedAt = DateTime.now();
+      await _waitForMinimum(stepFourStartedAt, _minimumStepFourDuration);
       if (!mounted) return;
 
       await Navigator.pushReplacement<void, void>(
@@ -114,7 +144,7 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
             imageBytes: widget.imageBytes,
             displayImageWidth: widget.imageWidth,
             displayImageHeight: widget.imageHeight,
-            ocrResult: widget.ocrResult,
+            ocrResult: ocrResult,
             response: response,
           ),
         ),
@@ -126,6 +156,45 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
         _returnToCameraOnError = false;
       });
     }
+  }
+
+  Future<void> _startPreviewFlow() async {
+    final stepOneStartedAt = DateTime.now();
+    await _waitForMinimum(stepOneStartedAt, _minimumStepOneDuration);
+    if (!mounted) return;
+
+    setState(() {
+      _currentStep = 2;
+      _statusMessage = '사진 속 메뉴 이름과 설명을 읽고 있어요.';
+    });
+
+    final stepTwoStartedAt = DateTime.now();
+    await _waitForMinimum(stepTwoStartedAt, _minimumStepTwoDuration);
+    if (!mounted) return;
+
+    setState(() {
+      _currentStep = 3;
+      _statusMessage = '알레르기와 취향 설정을 반영하고 있어요.';
+    });
+
+    final stepThreeStartedAt = DateTime.now();
+    await _waitForMinimum(stepThreeStartedAt, _minimumStepThreeDuration);
+    if (!mounted) return;
+
+    setState(() {
+      _currentStep = 4;
+      _statusMessage = '메뉴판 위에 분석 결과를 배치하고 있어요.';
+    });
+
+    final stepFourStartedAt = DateTime.now();
+    await _waitForMinimum(stepFourStartedAt, _minimumStepFourDuration);
+    if (!mounted) return;
+
+    setState(() {
+      _currentStep = 5;
+      _isPreviewComplete = true;
+      _statusMessage = '로딩 화면 테스트가 완료되었습니다.';
+    });
   }
 
   Future<void> _waitForMinimum(DateTime startedAt, Duration minimum) async {
@@ -160,41 +229,76 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF121212), Color(0xFF1E1E1E)],
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.memory(widget.imageBytes, fit: BoxFit.cover),
           ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: _errorMessage == null
-                  ? _LoadingBody(
-                      currentStep: _currentStep,
-                      statusMessage: _statusMessage,
-                    )
-                  : _ErrorBody(
-                      message: _errorMessage!,
-                      buttonLabel: _returnToCameraOnError ? '다시 촬영' : '이전 화면으로',
-                      onPressed: _handleErrorAction,
-                    ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.64),
+              ),
             ),
           ),
-        ),
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0x66121212),
+                    Color(0xE6121212),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 28,
+                ),
+                child: _errorMessage == null
+                    ? _LoadingBody(
+                        currentStep: _currentStep,
+                        statusMessage: _statusMessage,
+                        isPreviewComplete: _isPreviewComplete,
+                        onPreviewClose: widget.previewOnly
+                            ? () => Navigator.pop(context)
+                            : null,
+                      )
+                    : _ErrorBody(
+                        message: _errorMessage!,
+                        buttonLabel: _returnToCameraOnError
+                            ? '다시 촬영'
+                            : '이전 화면으로',
+                        onPressed: _handleErrorAction,
+                      ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _LoadingBody extends StatelessWidget {
-  const _LoadingBody({required this.currentStep, required this.statusMessage});
+  const _LoadingBody({
+    required this.currentStep,
+    required this.statusMessage,
+    required this.isPreviewComplete,
+    this.onPreviewClose,
+  });
 
   final int currentStep;
   final String statusMessage;
+  final bool isPreviewComplete;
+  final VoidCallback? onPreviewClose;
 
   @override
   Widget build(BuildContext context) {
@@ -226,14 +330,20 @@ class _LoadingBody extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
-                child: const SizedBox(
-                  width: 30,
-                  height: 30,
-                  child: CircularProgressIndicator(
-                    color: Color(0xFFF06292),
-                    strokeWidth: 3,
-                  ),
-                ),
+                child: isPreviewComplete
+                    ? const Icon(
+                        Icons.check_rounded,
+                        color: Color(0xFFF06292),
+                        size: 34,
+                      )
+                    : const SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFF06292),
+                          strokeWidth: 3,
+                        ),
+                      ),
               ),
               const SizedBox(height: 20),
               const Text(
@@ -257,16 +367,16 @@ class _LoadingBody extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               _StepTile(
-                label: '결과 정리',
-                description: '추출된 텍스트와 사용자 설정을 준비합니다.',
+                label: '메뉴판 확인',
+                description: '촬영한 이미지를 선명하게 정리하고 있어요.',
                 state: currentStep > 1
                     ? _StepState.completed
                     : _StepState.active,
               ),
               const SizedBox(height: 12),
               _StepTile(
-                label: '서버 분석 요청',
-                description: '추천 메뉴와 알레르기 정보를 조회합니다.',
+                label: '메뉴 글자 인식',
+                description: '사진 속 메뉴 이름과 설명을 읽고 있어요.',
                 state: currentStep > 2
                     ? _StepState.completed
                     : currentStep == 2
@@ -275,12 +385,47 @@ class _LoadingBody extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _StepTile(
-                label: '오버레이 준비',
-                description: '분석 결과를 화면 위에 표시할 준비를 합니다.',
-                state: currentStep == 3
+                label: '맞춤 분석',
+                description: '알레르기와 취향 설정을 반영하고 있어요.',
+                state: currentStep > 3
+                    ? _StepState.completed
+                    : currentStep == 3
                     ? _StepState.active
                     : _StepState.pending,
               ),
+              const SizedBox(height: 12),
+              _StepTile(
+                label: '결과 표시 준비',
+                description: '메뉴판 위에 분석 결과를 배치하고 있어요.',
+                state: currentStep > 4
+                    ? _StepState.completed
+                    : currentStep == 4
+                    ? _StepState.active
+                    : _StepState.pending,
+              ),
+              if (onPreviewClose != null) ...[
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: isPreviewComplete ? onPreviewClose : null,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      disabledForegroundColor: Colors.white38,
+                      side: BorderSide(
+                        color: isPreviewComplete
+                            ? Colors.white54
+                            : Colors.white24,
+                      ),
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('미리보기 닫기'),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

@@ -141,11 +141,9 @@ class UserPrefs {
 
   static Future<void> saveLanguageSettings({
     required String departureLanguage,
-    required String arrivalLanguage,
   }) async {
     final normalized = _normalizeLanguageSettings(
       departureLanguage: departureLanguage,
-      arrivalLanguage: arrivalLanguage,
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyDepartureLanguage, normalized.departure);
@@ -157,7 +155,6 @@ class UserPrefs {
     final prefs = await SharedPreferences.getInstance();
     final normalized = _normalizeLanguageSettings(
       departureLanguage: prefs.getString(_keyDepartureLanguage) ?? 'ja',
-      arrivalLanguage: prefs.getString(_keyArrivalLanguage) ?? 'ko',
     );
 
     final storedDeparture = prefs.getString(_keyDepartureLanguage);
@@ -173,28 +170,13 @@ class UserPrefs {
 
   static ({String departure, String arrival}) _normalizeLanguageSettings({
     required String departureLanguage,
-    required String arrivalLanguage,
   }) {
     final departureCodes = departureLanguageOptions.map((e) => e.code).toSet();
-    final arrivalCodes = arrivalLanguageOptions.map((e) => e.code).toSet();
 
     final departure = departureCodes.contains(departureLanguage)
         ? departureLanguage
         : departureLanguageOptions.first.code;
 
-    var arrival = arrivalCodes.contains(arrivalLanguage)
-        ? arrivalLanguage
-        : arrivalLanguageOptions.first.code;
-
-    if (departure == arrival) {
-      arrival = arrivalLanguageOptions
-          .firstWhere(
-            (option) => option.code != departure,
-            orElse: () => arrivalLanguageOptions.first,
-          )
-          .code;
-    }
-
-    return (departure: departure, arrival: arrival);
+    return (departure: departure, arrival: 'ko');
   }
 }

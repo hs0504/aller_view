@@ -27,8 +27,9 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
   late final Future<_PreviewData> _previewDataFuture;
   bool _isAnalyzing = false;
   bool _isTestingApi = false;
+  bool _isPreviewingLoading = false;
 
-  bool get _isBusy => _isAnalyzing || _isTestingApi;
+  bool get _isBusy => _isAnalyzing || _isTestingApi || _isPreviewingLoading;
 
   @override
   void initState() {
@@ -55,15 +56,8 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
     required double imageHeight,
   }) async {
     setState(() => _isAnalyzing = true);
-    final startedAt = DateTime.now();
 
     try {
-      final OcrResult result = await VisionApiClient.extractText(imageBytes);
-      if (!mounted) return;
-
-      await _waitForMinimum(startedAt, _minimumProcessingOverlayDuration);
-      if (!mounted) return;
-
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -71,19 +65,41 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
             imageBytes: imageBytes,
             imageWidth: imageWidth,
             imageHeight: imageHeight,
-            ocrResult: result,
           ),
         ),
       );
-    } on VisionApiException catch (e) {
-      if (!mounted) return;
-      _showError(e.message);
     } catch (_) {
       if (!mounted) return;
       _showError('예상하지 못한 오류가 발생했습니다. 다시 시도해 주세요.');
     } finally {
       if (mounted) {
         setState(() => _isAnalyzing = false);
+      }
+    }
+  }
+
+  Future<void> _previewLoadingScreen(
+    Uint8List imageBytes, {
+    required double imageWidth,
+    required double imageHeight,
+  }) async {
+    setState(() => _isPreviewingLoading = true);
+
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OcrResultScreen(
+            imageBytes: imageBytes,
+            imageWidth: imageWidth,
+            imageHeight: imageHeight,
+            previewOnly: true,
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isPreviewingLoading = false);
       }
     }
   }
@@ -179,101 +195,154 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
                 left: 20,
                 right: 20,
                 bottom: MediaQuery.paddingOf(context).bottom + 24,
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _isBusy
-                            ? null
-                            : () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: Colors.white70),
-                          minimumSize: const Size.fromHeight(52),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _isBusy
+                                ? null
+                                : () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Colors.white70),
+                              minimumSize: const Size.fromHeight(48),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: const Text('다시 촬영'),
                           ),
                         ),
-                        child: const Text('다시 촬영'),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _isBusy
+                                ? null
+                                : () async {
+                                    await HapticFeedback.selectionClick();
+                                    if (!mounted) return;
+                                    await _startApiJsonTest(preview.bytes);
+                                  },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFFFD1DE),
+                              disabledForegroundColor: Colors.white38,
+                              side: const BorderSide(color: Color(0xFFFF8FB1)),
+                              minimumSize: const Size.fromHeight(48),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            icon: _isTestingApi
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      color: Color(0xFFFFD1DE),
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.data_object_rounded,
+                                    size: 18,
+                                  ),
+                            label: const Text(
+                              'JSON 테스트',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: quality.isTooBlurry || _isBusy
-                            ? null
-                            : () async {
-                                await HapticFeedback.selectionClick();
-                                if (!mounted) return;
-                                await _startApiJsonTest(preview.bytes);
-                              },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFFFD1DE),
-                          disabledForegroundColor: Colors.white38,
-                          side: const BorderSide(color: Color(0xFFFF8FB1)),
-                          minimumSize: const Size.fromHeight(52),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _isBusy
+                                ? null
+                                : () async {
+                                    await HapticFeedback.selectionClick();
+                                    if (!mounted) return;
+                                    await _previewLoadingScreen(
+                                      preview.bytes,
+                                      imageWidth: preview.imageWidth,
+                                      imageHeight: preview.imageHeight,
+                                    );
+                                  },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              disabledForegroundColor: Colors.white38,
+                              side: const BorderSide(color: Colors.white70),
+                              minimumSize: const Size.fromHeight(52),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            icon: _isPreviewingLoading
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.play_circle_outline_rounded),
+                            label: const Text(
+                              '로딩화면 테스트',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13),
+                            ),
                           ),
                         ),
-                        icon: _isTestingApi
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  color: Color(0xFFFFD1DE),
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.data_object_rounded, size: 18),
-                        label: const Text(
-                          'JSON 테스트',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: quality.isTooBlurry || _isBusy
-                            ? null
-                            : () async {
-                                await HapticFeedback.selectionClick();
-                                if (!mounted) return;
-                                await _startOcr(
-                                  preview.bytes,
-                                  imageWidth: preview.imageWidth,
-                                  imageHeight: preview.imageHeight,
-                                );
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF06292),
-                          disabledBackgroundColor: Colors.white24,
-                          foregroundColor: Colors.white,
-                          disabledForegroundColor: Colors.white54,
-                          minimumSize: const Size.fromHeight(52),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: quality.isTooBlurry || _isBusy
+                                ? null
+                                : () async {
+                                    await HapticFeedback.selectionClick();
+                                    if (!mounted) return;
+                                    await _startOcr(
+                                      preview.bytes,
+                                      imageWidth: preview.imageWidth,
+                                      imageHeight: preview.imageHeight,
+                                    );
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF06292),
+                              disabledBackgroundColor: Colors.white24,
+                              foregroundColor: Colors.white,
+                              disabledForegroundColor: Colors.white54,
+                              minimumSize: const Size.fromHeight(52),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: _isAnalyzing
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text('이 사진 사용'),
                           ),
                         ),
-                        child: _isAnalyzing
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('이 사진 사용'),
-                      ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              if (_isBusy)
+              if (_isTestingApi)
                 Positioned.fill(
                   child: _ProcessingOverlay(isTestingApi: _isTestingApi),
                 ),
@@ -358,6 +427,12 @@ class _ProcessingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final title = isTestingApi ? '테스트 요청을 확인하고 있습니다' : '메뉴 글자 인식 중';
+    final description = isTestingApi
+        ? 'OCR과 AI 서버 응답을 함께 점검하는 중입니다.'
+        : '사진 속 메뉴 이름과 설명을 읽고 있어요.';
+    final stageLabel = isTestingApi ? '테스트 진행 중' : '메뉴 글자 인식';
+
     return DecoratedBox(
       decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.56)),
       child: Center(
@@ -394,8 +469,8 @@ class _ProcessingOverlay extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    const Text(
-                      '메뉴 텍스트를 추출하고 있습니다',
+                    Text(
+                      title,
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 19,
@@ -404,8 +479,8 @@ class _ProcessingOverlay extends StatelessWidget {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      '사진 속 메뉴 문구와 위치를 확인하는 중입니다.',
+                    Text(
+                      description,
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 14,
@@ -423,18 +498,18 @@ class _ProcessingOverlay extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.document_scanner_outlined,
                             color: Color(0xFFF06292),
                             size: 16,
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Text(
-                            '텍스트 추출 중',
-                            style: TextStyle(
+                            stageLabel,
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,

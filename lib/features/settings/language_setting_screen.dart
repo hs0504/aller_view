@@ -13,7 +13,6 @@ class LanguageSettingScreen extends StatefulWidget {
 
 class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
   String _departure = 'ja';
-  String _arrival = 'ko';
   bool _isLoading = true;
 
   @override
@@ -22,48 +21,18 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
     _loadSettings();
   }
 
-  void _showDistinctLanguageMessage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          '\ucd9c\ubc1c\u0020\uc5b8\uc5b4\uc640\u0020\ub3c4\ucc29\u0020\uc5b8\uc5b4\ub294\u0020\ub2e4\ub974\uac8c\u0020\uc124\uc815\ud574\u0020\uc8fc\uc138\uc694\u002e',
-        ),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
-
-  void _swap() {
-    final departureCodes = departureLanguageOptions.map((e) => e.code).toSet();
-    final arrivalCodes = arrivalLanguageOptions.map((e) => e.code).toSet();
-    if (!departureCodes.contains(_arrival) || !arrivalCodes.contains(_departure)) return;
-    setState(() {
-      final temp = _departure;
-      _departure = _arrival;
-      _arrival = temp;
-    });
-  }
-
   Future<void> _loadSettings() async {
     final settings = await UserPrefs.loadLanguageSettings();
     if (!mounted) return;
     setState(() {
       _departure = settings.departure;
-      _arrival = settings.arrival;
       _isLoading = false;
     });
   }
 
   Future<void> _onSave() async {
-    if (_departure == _arrival) {
-      _showDistinctLanguageMessage();
-      return;
-    }
-
     await UserPrefs.saveLanguageSettings(
       departureLanguage: _departure,
-      arrivalLanguage: _arrival,
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -129,9 +98,9 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
                           ),
                           arrival: _findOption(
                             arrivalLanguageOptions,
-                            _arrival,
+                            'ko',
                           ),
-                          onSwap: _swap,
+                          isSameLanguage: _departure == 'ko',
                         ),
                         const SizedBox(height: 28),
                         _SectionHeader(
@@ -149,33 +118,26 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
                         _LanguageGrid(
                           options: departureLanguageOptions,
                           selectedCode: _departure,
-                          disabledCodes: {_arrival},
                           onSelect: (code) {
                             setState(() => _departure = code);
                           },
-                          onDisabledTap: _showDistinctLanguageMessage,
                         ),
                         const SizedBox(height: 28),
                         _SectionHeader(
-                          title: '\ub3c4\ucc29\u0020\uc5b8\uc5b4',
+                          title: '\ubc88\uc5ed\u0020\uacb0\uacfc',
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '\ubc88\uc5ed\u0020\uacb0\uacfc\ub97c\u0020\ud45c\uc2dc\ud560\u0020\uc5b8\uc5b4\ub97c\u0020\uc120\ud0dd\ud574\u0020\uc8fc\uc138\uc694\u002e',
+                          '\ucd5c\uc885\u0020\uc2dc\uc5f0\u0020\ubc84\uc804\uc5d0\uc11c\ub294\u0020\ud55c\uad6d\uc5b4\u0020\uc0ac\uc6a9\uc790\uc5d0\uac8c\u0020\ub9de\ucdb0\u0020\uacb0\uacfc\ub97c\u0020\uc81c\uacf5\ud569\ub2c8\ub2e4\u002e',
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey[600],
                           ),
                         ),
                         const SizedBox(height: 14),
-                        _LanguageGrid(
-                          options: arrivalLanguageOptions,
-                          selectedCode: _arrival,
-                          disabledCodes: {_departure},
-                          onSelect: (code) {
-                            setState(() => _arrival = code);
-                          },
-                          onDisabledTap: _showDistinctLanguageMessage,
+                        _FixedArrivalCard(
+                          option: _findOption(arrivalLanguageOptions, 'ko'),
+                          isSameLanguage: _departure == 'ko',
                         ),
                         const SizedBox(height: 12),
                       ],
@@ -219,12 +181,12 @@ class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.departure,
     required this.arrival,
-    this.onSwap,
+    required this.isSameLanguage,
   });
 
   final LanguageOption departure;
   final LanguageOption arrival;
-  final VoidCallback? onSwap;
+  final bool isSameLanguage;
 
   @override
   Widget build(BuildContext context) {
@@ -250,25 +212,24 @@ class _SummaryCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
               children: [
-                Material(
-                  color: Colors.white,
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    onTap: onSwap,
-                    customBorder: const CircleBorder(),
-                    child: const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: Icon(
-                        Icons.swap_horiz_rounded,
-                        color: Color(0xFFF06292),
-                        size: 24,
-                      ),
-                    ),
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isSameLanguage
+                        ? Icons.analytics_rounded
+                        : Icons.arrow_forward_rounded,
+                    color: const Color(0xFFF06292),
+                    size: 24,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '\uad50\ud658',
+                  isSameLanguage ? '\ubd84\uc11d' : '\ubc88\uc5ed',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 11,
@@ -281,7 +242,7 @@ class _SummaryCard extends StatelessWidget {
           Expanded(
             child: _SummaryLanguageItem(
               option: arrival,
-              label: '\ub3c4\ucc29',
+              label: '\uacb0\uacfc',
             ),
           ),
         ],
@@ -337,6 +298,112 @@ class _SummaryLanguageItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FixedArrivalCard extends StatelessWidget {
+  const _FixedArrivalCard({
+    required this.option,
+    required this.isSameLanguage,
+  });
+
+  final LanguageOption option;
+  final bool isSameLanguage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFCE4EC)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFCE4EC),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: Text(option.flag, style: const TextStyle(fontSize: 25)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        isSameLanguage
+                            ? '\ud55c\uad6d\uc5b4\u0020\uba54\ub274\ud310\u0020\ubd84\uc11d'
+                            : '\ud55c\uad6d\uc5b4\u0020\ubc88\uc5ed',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF1A1A1A),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF06292).withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        '\uace0\uc815',
+                        style: TextStyle(
+                          color: Color(0xFFF06292),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  isSameLanguage
+                      ? '\ubc88\uc5ed\u0020\uc5c6\uc774\u0020\uba54\ub274\u0020\uc815\ubcf4\uc640\u0020\uc54c\ub808\ub974\uae30\u0020\uc704\ud5d8\uc744\u0020\ud55c\uad6d\uc5b4\ub85c\u0020\uc815\ub9ac\ud569\ub2c8\ub2e4\u002e'
+                      : '\ubd84\uc11d\u0020\uacb0\uacfc\uc640\u0020\uba54\ub274\u0020\uc124\uba85\uc740\u0020\ud55c\uad6d\uc5b4\ub85c\u0020\uc81c\uacf5\ub429\ub2c8\ub2e4\u002e',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Icon(
+            Icons.lock_rounded,
+            color: Color(0xFFF06292),
+            size: 20,
+          ),
+        ],
+      ),
     );
   }
 }
