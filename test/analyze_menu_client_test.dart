@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:allerview/core/api/analyze_menu_client.dart';
 import 'package:allerview/core/ocr/ocr_result.dart';
 import 'package:flutter_test/flutter_test.dart';

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/data/allergy_data.dart';
 import '../../core/data/language_data.dart';
 import '../../core/storage/user_prefs.dart';
 import '../camera/menu_camera_screen.dart';
+import '../camera/menu_photo_preview_screen.dart';
 import '../location/location_screen.dart';
 import '../onboarding/allergy_selection_screen.dart';
 import '../onboarding/preference_selection_screen.dart';
@@ -24,6 +26,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   List<int> _allergyIndices = [];
   String _departureLanguage = 'ja';
   String _arrivalLanguage = 'ko';
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -49,7 +52,25 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     });
   }
 
-  Future<void> _handleCameraCardPressed() async {
+  Future<void> _handleAnalyzeCardPressed() async {
+    final source = await showModalBottomSheet<_MenuImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => const _MenuImageSourceSheet(),
+    );
+
+    if (!mounted || source == null) return;
+
+    switch (source) {
+      case _MenuImageSource.camera:
+        await _openCameraWithPermission();
+      case _MenuImageSource.gallery:
+        await _pickFromGallery();
+    }
+  }
+
+  Future<void> _openCameraWithPermission() async {
     var status = await Permission.camera.status;
     if (!status.isGranted) {
       status = await Permission.camera.request();
@@ -69,15 +90,40 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     );
   }
 
+  Future<void> _pickFromGallery() async {
+    try {
+      final photo = await _imagePicker.pickImage(source: ImageSource.gallery);
+      if (!mounted || photo == null) return;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MenuPhotoPreviewScreen(
+            photo: photo,
+            source: MenuPhotoSource.gallery,
+          ),
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Failed to pick gallery image: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('갤러리에서 사진을 불러오지 못했어요. 다시 시도해 주세요.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Future<void> _showCameraPermissionDialog({required bool canOpenSettings}) {
     return showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('카메라 권한이 필요해요'),
-          content: const Text(
-            '메뉴판을 촬영하려면 카메라 접근을 허용해 주세요.',
-          ),
+          content: const Text('메뉴판을 촬영하려면 카메라 접근을 허용해 주세요.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
@@ -101,8 +147,9 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final quickMenuAspectRatio =
-        screenWidth < 380 || textScale > 1.1 ? 0.88 : 1.2;
+    final quickMenuAspectRatio = screenWidth < 380 || textScale > 1.1
+        ? 0.88
+        : 1.2;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFF5F7),
@@ -159,7 +206,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               _SectionHeader(title: '\uba54\ub274\ud310\u0020\ubd84\uc11d'),
               const SizedBox(height: 10),
               _CameraCard(
-                onCameraTap: _handleCameraCardPressed,
+                onCameraTap: _handleAnalyzeCardPressed,
                 onLanguageTap: () async {
                   await Navigator.push(
                     context,
@@ -186,14 +233,14 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                   _QuickMenuCard(
                     icon: Icons.medical_information_outlined,
                     title: '\uc54c\ub808\ub974\uae30\u0020\uad00\ub9ac',
-                    desc: '\ub0b4\u0020\uc54c\ub808\ub974\uae30\u0020\ud56d\ubaa9\u0020\ud3b8\uc9d1',
+                    desc:
+                        '\ub0b4\u0020\uc54c\ub808\ub974\uae30\u0020\ud56d\ubaa9\u0020\ud3b8\uc9d1',
                     onTap: () async {
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const AllergySelectionScreen(
-                            isEditMode: true,
-                          ),
+                          builder: (_) =>
+                              const AllergySelectionScreen(isEditMode: true),
                         ),
                       );
                       _loadAllergyData(); // ??轅붽틓????獄쏅챸???????????????????ル늉????
@@ -202,20 +249,21 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                   _QuickMenuCard(
                     icon: Icons.restaurant_menu_outlined,
                     title: '\ucde8\ud5a5\u0020\uad00\ub9ac',
-                    desc: '\uc74c\uc2dd\u0020\uc120\ud638\ub3c4\u0020\ud3b8\uc9d1',
+                    desc:
+                        '\uc74c\uc2dd\u0020\uc120\ud638\ub3c4\u0020\ud3b8\uc9d1',
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const PreferenceSelectionScreen(
-                          isEditMode: true,
-                        ),
+                        builder: (_) =>
+                            const PreferenceSelectionScreen(isEditMode: true),
                       ),
                     ),
                   ),
                   _QuickMenuCard(
                     icon: Icons.location_on,
                     title: '\uc8fc\ubcc0\u0020\uc2dd\ub2f9\u0020\ucc3e\uae30',
-                    desc: '\ud604\uc7ac\u0020\uc704\uce58\u0020\uae30\ubc18\u0020\uc8fc\ubcc0\u0020\uc2dd\ub2f9\u0020\ud0d0\uc0c9',
+                    desc:
+                        '\ud604\uc7ac\u0020\uc704\uce58\u0020\uae30\ubc18\u0020\uc8fc\ubcc0\u0020\uc2dd\ub2f9\u0020\ud0d0\uc0c9',
                     onTap: () {
                       Navigator.push(
                         context,
@@ -263,7 +311,10 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: '\ud648'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: '\ub0b4\u0020\uc815\ubcf4'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: '\ub0b4\u0020\uc815\ubcf4',
+          ),
         ],
       ),
     );
@@ -355,11 +406,7 @@ class _AllergyHeaderCard extends StatelessWidget {
 }
 
 class _AllergyChip extends StatelessWidget {
-  const _AllergyChip({
-    required this.label,
-    required this.dotColor,
-    this.onTap,
-  });
+  const _AllergyChip({required this.label, required this.dotColor, this.onTap});
 
   final String label;
   final Color dotColor;
@@ -511,9 +558,8 @@ class _AllergyBottomSheet extends StatelessWidget {
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const AllergySelectionScreen(
-                        isEditMode: true,
-                      ),
+                      builder: (_) =>
+                          const AllergySelectionScreen(isEditMode: true),
                     ),
                   );
                   onAllergyChanged();
@@ -534,6 +580,156 @@ class _AllergyBottomSheet extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+enum _MenuImageSource { camera, gallery }
+
+class _MenuImageSourceSheet extends StatelessWidget {
+  const _MenuImageSourceSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          12,
+          20,
+          MediaQuery.paddingOf(context).bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              '메뉴판 이미지 선택',
+              style: TextStyle(
+                color: Color(0xFF2D2D2D),
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '분석할 메뉴판 이미지를 가져올 방법을 선택해 주세요.',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 18),
+            _ImageSourceOption(
+              icon: Icons.photo_camera_rounded,
+              iconColor: const Color(0xFFF06292),
+              title: '카메라로 촬영',
+              description: '지금 메뉴판을 촬영해서 바로 분석해요.',
+              onTap: () => Navigator.pop(context, _MenuImageSource.camera),
+            ),
+            const SizedBox(height: 10),
+            _ImageSourceOption(
+              icon: Icons.photo_library_rounded,
+              iconColor: const Color(0xFF42A5F5),
+              title: '갤러리에서 선택',
+              description: '저장된 메뉴판 사진을 불러와 분석해요.',
+              onTap: () => Navigator.pop(context, _MenuImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ImageSourceOption extends StatelessWidget {
+  const _ImageSourceOption({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.description,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String description;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFFFF5F7),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Color(0xFF2D2D2D),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: Color(0xFFBDBDBD),
+                size: 15,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -588,9 +784,11 @@ class _CameraCard extends StatelessWidget {
               child: Stack(
                 children: [
                   Positioned(
-                    right: -20, top: -20,
+                    right: -20,
+                    top: -20,
                     child: Container(
-                      width: 100, height: 100,
+                      width: 100,
+                      height: 100,
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.08),
                         shape: BoxShape.circle,
@@ -598,9 +796,11 @@ class _CameraCard extends StatelessWidget {
                     ),
                   ),
                   Positioned(
-                    right: 25, bottom: -25,
+                    right: 25,
+                    bottom: -25,
                     child: Container(
-                      width: 70, height: 70,
+                      width: 70,
+                      height: 70,
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.06),
                         shape: BoxShape.circle,
@@ -608,11 +808,15 @@ class _CameraCard extends StatelessWidget {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 16,
+                    ),
                     child: Row(
                       children: [
                         Container(
-                          width: 50, height: 50,
+                          width: 50,
+                          height: 50,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.22),
                             borderRadius: BorderRadius.circular(14),
@@ -630,7 +834,7 @@ class _CameraCard extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const Text(
-                                '\uba54\ub274\ud310\u0020\ucd2c\uc601\ud558\uae30',
+                                '메뉴판 분석하기',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
@@ -640,7 +844,7 @@ class _CameraCard extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '\u0041\u0049\uac00\u0020\uc54c\ub808\ub974\uae30\u0020\uc131\ubd84\uc744\u0020\uc790\ub3d9\uc73c\ub85c\u0020\ubd84\uc11d\ud574\uc694',
+                                '메뉴판을 찍거나 갤러리에서 사진을 불러와 분석을 시작해요',
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.80),
                                   fontSize: 12,
@@ -649,14 +853,15 @@ class _CameraCard extends StatelessWidget {
                               const SizedBox(height: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4,
+                                  horizontal: 10,
+                                  vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withValues(alpha: 0.22),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: const Text(
-                                  '탭하여 시작',
+                                  '분석 시작',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 11,
@@ -678,14 +883,14 @@ class _CameraCard extends StatelessWidget {
                 ],
               ),
             ),
-            Container(
-              height: 1,
-              color: Colors.white.withValues(alpha: 0.20),
-            ),
+            Container(height: 1, color: Colors.white.withValues(alpha: 0.20)),
             GestureDetector(
               onTap: onLanguageTap,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 14,
+                ),
                 child: Row(
                   children: [
                     Flexible(

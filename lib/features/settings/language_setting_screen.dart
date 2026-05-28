@@ -413,15 +413,11 @@ class _LanguageGrid extends StatelessWidget {
     required this.options,
     required this.selectedCode,
     required this.onSelect,
-    this.disabledCodes = const {},
-    this.onDisabledTap,
   });
 
   final List<LanguageOption> options;
   final String selectedCode;
   final ValueChanged<String> onSelect;
-  final Set<String> disabledCodes;
-  final VoidCallback? onDisabledTap;
 
   @override
   Widget build(BuildContext context) {
@@ -441,9 +437,8 @@ class _LanguageGrid extends StatelessWidget {
       itemBuilder: (_, index) => _LanguageCard(
         option: options[index],
         isSelected: options[index].code == selectedCode,
-        isDisabled: disabledCodes.contains(options[index].code),
+        isDisabled: false,
         onTap: () => onSelect(options[index].code),
-        onDisabledTap: onDisabledTap,
       ),
     );
   }
@@ -455,19 +450,17 @@ class _LanguageCard extends StatelessWidget {
     required this.isSelected,
     required this.isDisabled,
     required this.onTap,
-    this.onDisabledTap,
   });
 
   final LanguageOption option;
   final bool isSelected;
   final bool isDisabled;
   final VoidCallback onTap;
-  final VoidCallback? onDisabledTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: isDisabled ? onDisabledTap : onTap,
+      onTap: isDisabled ? null : onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,

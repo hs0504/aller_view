@@ -257,7 +257,7 @@ class _LocationScreenState extends State<LocationScreen> {
               horizontal: 12,
               vertical: 8,
             ),
-            color: Colors.white.withOpacity(0.9),
+            color: Colors.white.withValues(alpha: 0.9),
             child: Row(
               children: [
                 const BackButton(color: Colors.black),
@@ -436,7 +436,7 @@ class _LocationScreenState extends State<LocationScreen> {
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.07),
+                        color: Colors.black.withValues(alpha: 0.07),
                         blurRadius: 6,
                         offset: const Offset(0, 3),
                       ),

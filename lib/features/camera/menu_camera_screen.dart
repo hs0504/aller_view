@@ -107,9 +107,7 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
 
       await Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => MenuPhotoPreviewScreen(photo: photo),
-        ),
+        MaterialPageRoute(builder: (_) => MenuPhotoPreviewScreen(photo: photo)),
       );
     } on CameraException catch (error) {
       if (!mounted) return;
@@ -145,7 +143,9 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
     final mediaSize = MediaQuery.sizeOf(context);
     final padding = MediaQuery.paddingOf(context);
     final hasPreview =
-        !_isInitializing && controller != null && controller.value.isInitialized;
+        !_isInitializing &&
+        controller != null &&
+        controller.value.isInitialized;
     final topPad = padding.top;
     final bottomPad = padding.bottom;
     const horizontalInset = 18.0;
@@ -172,17 +172,13 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
           ),
           if (hasPreview) ...[
             const Positioned.fill(
-              child: IgnorePointer(
-                child: _CameraAtmosphere(),
-              ),
+              child: IgnorePointer(child: _CameraAtmosphere()),
             ),
             Positioned(
               left: 16,
               right: 16,
               top: topPad + 8,
-              child: _CameraTopBar(
-                onClose: () => Navigator.pop(context),
-              ),
+              child: _CameraTopBar(onClose: () => Navigator.pop(context)),
             ),
             Positioned(
               left: horizontalInset,
@@ -256,10 +252,7 @@ class _CameraTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _GlassIconButton(
-          icon: Icons.close_rounded,
-          onPressed: onClose,
-        ),
+        _GlassIconButton(icon: Icons.close_rounded, onPressed: onClose),
         Expanded(
           child: Center(
             child: DecoratedBox(
@@ -269,7 +262,10 @@ class _CameraTopBar extends StatelessWidget {
                 border: Border.all(color: Colors.white24),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 10,
+                ),
                 child: Text(
                   '\uba54\ub274\ud310 \ucd2c\uc601',
                   style: GoogleFonts.poppins(
@@ -290,10 +286,7 @@ class _CameraTopBar extends StatelessWidget {
 }
 
 class _GlassIconButton extends StatelessWidget {
-  const _GlassIconButton({
-    required this.icon,
-    required this.onPressed,
-  });
+  const _GlassIconButton({required this.icon, required this.onPressed});
 
   final IconData icon;
   final VoidCallback onPressed;
@@ -391,7 +384,9 @@ class _GuideFrame extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFF06292).withValues(alpha: 0.32),
+                            color: const Color(
+                              0xFFF06292,
+                            ).withValues(alpha: 0.32),
                             blurRadius: 14,
                             spreadRadius: 1,
                           ),
@@ -414,10 +409,7 @@ class _GuideFrame extends StatelessWidget {
 }
 
 class _FrameCorner extends StatelessWidget {
-  const _FrameCorner({
-    required this.top,
-    required this.left,
-  });
+  const _FrameCorner({required this.top, required this.left});
 
   final bool top;
   final bool left;
@@ -606,8 +598,9 @@ class _CaptureDock extends StatelessWidget {
                     border: Border.all(color: Colors.white30, width: 1.2),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFF06292)
-                            .withValues(alpha: isPressingShutter ? 0.46 : 0.28),
+                        color: const Color(
+                          0xFFF06292,
+                        ).withValues(alpha: isPressingShutter ? 0.46 : 0.28),
                         blurRadius: isPressingShutter ? 28 : 20,
                         spreadRadius: isPressingShutter ? 5 : 2,
                       ),
@@ -621,9 +614,7 @@ class _CaptureDock extends StatelessWidget {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          isTakingPicture
-                              ? Colors.white70
-                              : Colors.white,
+                          isTakingPicture ? Colors.white70 : Colors.white,
                           isTakingPicture
                               ? Colors.white54
                               : const Color(0xFFFFF4F7),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -12,10 +13,41 @@ import 'menu_image_normalizer.dart';
 import 'ocr_result_screen.dart';
 import 'photo_quality_analyzer.dart';
 
+enum MenuPhotoSource { camera, gallery }
+
+const int _galleryPreviewMaxLongSide = 2200;
+
+_PreviewData _buildPreviewData(Uint8List sourceBytes, {int? maxLongSide}) {
+  final normalized = MenuImageNormalizer.normalize(
+    sourceBytes,
+    maxLongSide: maxLongSide,
+  );
+  final quality = PhotoQualityAnalyzer.analyze(normalized.bytes);
+
+  return _PreviewData(
+    bytes: normalized.bytes,
+    quality: quality,
+    imageWidth: normalized.width,
+    imageHeight: normalized.height,
+  );
+}
+
+_PreviewData _buildGalleryPreviewData(Uint8List sourceBytes) {
+  return _buildPreviewData(
+    sourceBytes,
+    maxLongSide: _galleryPreviewMaxLongSide,
+  );
+}
+
 class MenuPhotoPreviewScreen extends StatefulWidget {
-  const MenuPhotoPreviewScreen({super.key, required this.photo});
+  const MenuPhotoPreviewScreen({
+    super.key,
+    required this.photo,
+    this.source = MenuPhotoSource.camera,
+  });
 
   final XFile photo;
+  final MenuPhotoSource source;
 
   @override
   State<MenuPhotoPreviewScreen> createState() => _MenuPhotoPreviewScreenState();
@@ -30,6 +62,8 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
   bool _isPreviewingLoading = false;
 
   bool get _isBusy => _isAnalyzing || _isTestingApi || _isPreviewingLoading;
+  String get _retryLabel =>
+      widget.source == MenuPhotoSource.gallery ? '다시 선택' : '다시 촬영';
 
   @override
   void initState() {
@@ -39,14 +73,14 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
 
   Future<_PreviewData> _loadPreviewData() async {
     final sourceBytes = await widget.photo.readAsBytes();
-    final normalized = MenuImageNormalizer.normalize(sourceBytes);
-    final quality = PhotoQualityAnalyzer.analyze(normalized.bytes);
+    if (widget.source == MenuPhotoSource.camera) {
+      return _buildPreviewData(sourceBytes);
+    }
 
-    return _PreviewData(
-      bytes: normalized.bytes,
-      quality: quality,
-      imageWidth: normalized.width,
-      imageHeight: normalized.height,
+    return compute(
+      _buildGalleryPreviewData,
+      sourceBytes,
+      debugLabel: 'menu_photo_preview',
     );
   }
 
@@ -213,7 +247,7 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
-                            child: const Text('다시 촬영'),
+                            child: Text(_retryLabel),
                           ),
                         ),
                         const SizedBox(width: 10),

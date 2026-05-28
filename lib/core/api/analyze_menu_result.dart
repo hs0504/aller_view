@@ -188,17 +188,30 @@ class AnalyzedMenuItem {
   }
 }
 
+enum RecommendationReason { category, taste }
+
 class RecommendedMenuItem {
-  const RecommendedMenuItem({required this.itemId, required this.koreanName});
+  const RecommendedMenuItem({
+    required this.itemId,
+    required this.koreanName,
+    required this.reasons,
+  });
 
   final String itemId;
   final String koreanName;
+  final Set<RecommendationReason> reasons;
 
-  factory RecommendedMenuItem.fromJson(Map<String, dynamic> json) =>
-      RecommendedMenuItem(
-        itemId: json['item_id'] as String? ?? '',
-        koreanName: json['korean_name'] as String? ?? '',
-      );
+  bool get isCategoryRecommended =>
+      reasons.contains(RecommendationReason.category);
+  bool get isTasteRecommended => reasons.contains(RecommendationReason.taste);
+}
+
+class _RecommendedMenuDraft {
+  _RecommendedMenuDraft({required this.itemId});
+
+  final String itemId;
+  String koreanName = '';
+  final Set<RecommendationReason> reasons = <RecommendationReason>{};
 }
 
 class AnalyzeMenuResponse {
@@ -231,8 +244,6 @@ class AnalyzeMenuResponse {
     required String rawResponseBody,
   }) {
     final rawItems = json['analyzed_menu_items'] as List<dynamic>? ?? const [];
-    final rawRecommendations =
-        json['recommendations'] as List<dynamic>? ?? const [];
 
     return AnalyzeMenuResponse(
       status: json['status'] as String? ?? 'success',
@@ -242,14 +253,54 @@ class AnalyzeMenuResponse {
           .whereType<Map<String, dynamic>>()
           .map(AnalyzedMenuItem.fromJson)
           .toList(),
-      recommendations: rawRecommendations
-          .whereType<Map<String, dynamic>>()
-          .map(RecommendedMenuItem.fromJson)
-          .toList(),
+      recommendations: _parseRecommendations(json['recommendations']),
       requestUrl: requestUrl,
       requestJson: requestJson,
       rawResponseBody: rawResponseBody,
     );
+  }
+
+  static List<RecommendedMenuItem> _parseRecommendations(Object? raw) {
+    if (raw is! Map<String, dynamic>) {
+      return const <RecommendedMenuItem>[];
+    }
+
+    final byItemId = <String, _RecommendedMenuDraft>{};
+
+    void collect(String key, RecommendationReason reason) {
+      final rawItems = raw[key];
+      if (rawItems is! List<dynamic>) return;
+
+      for (final rawItem in rawItems) {
+        if (rawItem is! Map<String, dynamic>) continue;
+
+        final itemId = (rawItem['item_id'] as String?)?.trim();
+        if (itemId == null || itemId.isEmpty) continue;
+
+        final draft = byItemId.putIfAbsent(
+          itemId,
+          () => _RecommendedMenuDraft(itemId: itemId),
+        );
+        final koreanName = (rawItem['korean_name'] as String?)?.trim() ?? '';
+        if (draft.koreanName.isEmpty && koreanName.isNotEmpty) {
+          draft.koreanName = koreanName;
+        }
+        draft.reasons.add(reason);
+      }
+    }
+
+    collect('category', RecommendationReason.category);
+    collect('taste', RecommendationReason.taste);
+
+    return byItemId.values
+        .map(
+          (draft) => RecommendedMenuItem(
+            itemId: draft.itemId,
+            koreanName: draft.koreanName,
+            reasons: Set<RecommendationReason>.unmodifiable(draft.reasons),
+          ),
+        )
+        .toList(growable: false);
   }
 
   factory AnalyzeMenuResponse.dummy(List<String> lines) {
@@ -299,6 +350,7 @@ class AnalyzeMenuResponse {
             RecommendedMenuItem(
               itemId: items.first.itemId,
               koreanName: items.first.translatedText,
+              reasons: const {RecommendationReason.category},
             ),
           ];
 

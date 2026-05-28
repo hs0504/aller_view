@@ -18,6 +18,11 @@ void main() {
     expect(response.isSuccess, isTrue);
     expect(response.items, hasLength(4));
     expect(response.recommendations.single.itemId, 'result_003');
+    expect(response.recommendations.single.koreanName, '사이다');
+    expect(response.recommendations.single.reasons, {
+      RecommendationReason.category,
+      RecommendationReason.taste,
+    });
 
     final mergedItem = response.items[0];
     expect(mergedItem.itemId, 'result_001');
@@ -26,7 +31,7 @@ void main() {
     expect(mergedItem.translatedText, '새우 버터 스테이크');
     expect(mergedItem.normalizedText, '새우버터스테이크');
     expect(mergedItem.sourceBoxIds, ['box_001', 'box_002']);
-    expect(mergedItem.layoutDirection, isNull);
+    expect(mergedItem.layoutDirection, 'vertical');
     expect(mergedItem.layoutRatio, isNull);
     expect(mergedItem.hasRiskAnalysis, isTrue);
     expect(mergedItem.dishId, 1);
@@ -61,6 +66,43 @@ void main() {
     expect(response.items, isEmpty);
     expect(response.recommendations, isEmpty);
   });
+
+  test('parses categorized recommendations and deduplicates by item id', () {
+    final response = AnalyzeMenuResponse.fromJson(
+      jsonDecode(_categorizedRecommendationsJson) as Map<String, dynamic>,
+      requestUrl: 'https://example.test/api/analyze-menu',
+      requestJson: '{}',
+      rawResponseBody: _categorizedRecommendationsJson,
+    );
+
+    expect(response.recommendations, hasLength(2));
+
+    final result015 = response.recommendations.firstWhere(
+      (item) => item.itemId == 'result_015',
+    );
+    expect(result015.koreanName, '계란덮밥');
+    expect(result015.reasons, {
+      RecommendationReason.category,
+      RecommendationReason.taste,
+    });
+
+    final result016 = response.recommendations.firstWhere(
+      (item) => item.itemId == 'result_016',
+    );
+    expect(result016.koreanName, '김치찌개');
+    expect(result016.reasons, {RecommendationReason.taste});
+  });
+
+  test('ignores empty or malformed recommendation groups', () {
+    final response = AnalyzeMenuResponse.fromJson(
+      jsonDecode(_emptyRecommendationsJson) as Map<String, dynamic>,
+      requestUrl: 'https://example.test/api/analyze-menu',
+      requestJson: '{}',
+      rawResponseBody: _emptyRecommendationsJson,
+    );
+
+    expect(response.recommendations, isEmpty);
+  });
 }
 
 const _successResponseJson = '''
@@ -80,7 +122,7 @@ const _successResponseJson = '''
       },
       "layout": {
         "source_box_ids": ["box_001", "box_002"],
-        "direction": null,
+        "direction": "vertical",
         "ratio": null
       },
       "risk_analyzed_result": {
@@ -146,12 +188,20 @@ const _successResponseJson = '''
       "risk_analyzed_result": null
     }
   ],
-  "recommendations": [
-    {
-      "item_id": "result_003",
-      "korean_name": "사이다"
-    }
-  ]
+  "recommendations": {
+    "category": [
+      {
+        "item_id": "result_003",
+        "korean_name": "사이다"
+      }
+    ],
+    "taste": [
+      {
+        "item_id": "result_003",
+        "korean_name": "사이다"
+      }
+    ]
+  }
 }
 ''';
 
@@ -161,6 +211,53 @@ const _errorResponseJson = '''
   "error_code": "OCR_NOISE_TOO_HIGH",
   "error_message": "메뉴판의 텍스트를 인식하기 어렵습니다.",
   "analyzed_menu_items": [],
-  "recommendations": []
+  "recommendations": {}
+}
+''';
+
+const _categorizedRecommendationsJson = '''
+{
+  "status": "success",
+  "error_code": null,
+  "error_message": null,
+  "analyzed_menu_items": [],
+  "recommendations": {
+    "category": [
+      {
+        "item_id": "result_015",
+        "korean_name": "계란덮밥"
+      }
+    ],
+    "taste": [
+      {
+        "item_id": "result_015",
+        "korean_name": "계란덮밥"
+      },
+      {
+        "item_id": "result_016",
+        "korean_name": "김치찌개"
+      }
+    ]
+  }
+}
+''';
+
+const _emptyRecommendationsJson = '''
+{
+  "status": "success",
+  "error_code": null,
+  "error_message": null,
+  "analyzed_menu_items": [],
+  "recommendations": {
+    "category": null,
+    "taste": [
+      {},
+      null,
+      {
+        "item_id": "",
+        "korean_name": "무시"
+      }
+    ]
+  }
 }
 ''';

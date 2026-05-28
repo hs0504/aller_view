@@ -72,6 +72,9 @@ class OverlayResultScreen extends StatelessWidget {
   Set<String> get _recommendedItemIds => {
     for (final item in response.recommendations) item.itemId,
   };
+  Map<String, RecommendedMenuItem> get _recommendedItemsById => {
+    for (final item in response.recommendations) item.itemId: item,
+  };
 
   void _showDebugInfo(BuildContext context) {
     final info = debugInfo;
@@ -137,6 +140,7 @@ class OverlayResultScreen extends StatelessWidget {
               ocrResult: ocrResult,
               items: response.items,
               recommendedItemIds: _recommendedItemIds,
+              recommendedItemsById: _recommendedItemsById,
               isDummy: isDummy,
             ),
           ),
@@ -215,6 +219,7 @@ class _OverlayImageView extends StatelessWidget {
     required this.ocrResult,
     required this.items,
     required this.recommendedItemIds,
+    required this.recommendedItemsById,
     required this.isDummy,
   });
 
@@ -226,6 +231,7 @@ class _OverlayImageView extends StatelessWidget {
   final OcrResult ocrResult;
   final List<AnalyzedMenuItem> items;
   final Set<String> recommendedItemIds;
+  final Map<String, RecommendedMenuItem> recommendedItemsById;
   final bool isDummy;
 
   String? _displayTextFor(AnalyzedMenuItem item) {
@@ -290,6 +296,12 @@ class _OverlayImageView extends StatelessWidget {
     return ratios.map((ratio) => ratio! / total).toList();
   }
 
+  String? _validLayoutDirection(String? direction) {
+    return direction == 'horizontal' || direction == 'vertical'
+        ? direction
+        : null;
+  }
+
   List<_ResolvedOverlayItem> _resolveOverlayItems({
     required Map<String, OcrTextBlock> blockMap,
     required double scaleX,
@@ -325,13 +337,25 @@ class _OverlayImageView extends StatelessWidget {
             .putIfAbsent(pending.sourceBoxIds.single, () => [])
             .add(pending);
       } else {
-        resolved.add(pending.resolve(pending.sourceRect));
+        resolved.add(
+          pending.resolve(
+            pending.sourceRect,
+            splitDirection: _validLayoutDirection(pending.item.layoutDirection),
+          ),
+        );
       }
     }
 
     for (final group in groupedBySingleSource.values) {
       if (group.length == 1) {
-        resolved.add(group.single.resolve(group.single.sourceRect));
+        resolved.add(
+          group.single.resolve(
+            group.single.sourceRect,
+            splitDirection: _validLayoutDirection(
+              group.single.item.layoutDirection,
+            ),
+          ),
+        );
         continue;
       }
 
@@ -439,6 +463,8 @@ class _OverlayImageView extends StatelessWidget {
                     isRecommended: recommendedItemIds.contains(
                       overlayItem.item.itemId,
                     ),
+                    recommendation:
+                        recommendedItemsById[overlayItem.item.itemId],
                     isDummy: isDummy,
                     canvasWidth: canvasWidth,
                   ),
@@ -564,7 +590,7 @@ class _OverlayGuideItem {
           message: '가격 라벨을 터치하면 대략적인 환산 금액을 볼 수 있어요.',
           icon: Icons.currency_exchange_rounded,
           color: const Color(0xFF42A5F5),
-          targetRect: priceItem.rect,
+          targetRect: _priceBadgeRect(priceItem, canvasWidth),
         ),
     ];
   }
@@ -638,6 +664,19 @@ class _OverlayGuideItem {
       canvasWidth: canvasWidth,
       leftOffset: item.item.hasRiskAnalysis ? 56 + _overlayBadgeSpacing : 0,
       width: 76,
+    );
+  }
+
+  static Rect _priceBadgeRect(_ResolvedOverlayItem item, double canvasWidth) {
+    if (_isVerticalSplit(item)) {
+      return _sideBadgeRect(item, canvasWidth);
+    }
+
+    return _topBadgeRect(
+      item: item,
+      canvasWidth: canvasWidth,
+      leftOffset: 0,
+      width: 52,
     );
   }
 }
@@ -1160,12 +1199,14 @@ class _OverlayBox extends StatelessWidget {
   const _OverlayBox({
     required this.overlayItem,
     required this.isRecommended,
+    required this.recommendation,
     required this.isDummy,
     required this.canvasWidth,
   });
 
   final _ResolvedOverlayItem overlayItem;
   final bool isRecommended;
+  final RecommendedMenuItem? recommendation;
   final bool isDummy;
   final double canvasWidth;
 
@@ -1187,6 +1228,7 @@ class _OverlayBox extends StatelessWidget {
       item.itemType == 'price' &&
       item.convertedPrice != null &&
       item.convertedPrice!.trim().isNotEmpty;
+  bool get _showsPriceBadge => _showsPriceHint;
 
   Color get _overlayColor {
     if (_showsRiskBadge) return _allergyColor(_risk);
@@ -1202,7 +1244,7 @@ class _OverlayBox extends StatelessWidget {
     TextStyle style,
     TextDirection textDirection, {
     double maxWidth = double.infinity,
-    int maxLines = 1,
+    int? maxLines = 1,
   }) {
     return TextPainter(
       text: TextSpan(text: text, style: style),
@@ -1230,7 +1272,7 @@ class _OverlayBox extends StatelessWidget {
     TextDirection textDirection, {
     required double maxWidth,
     required double maxHeight,
-    required int maxLines,
+    required int? maxLines,
     double minFontSize = 12.0,
   }) {
     var low = minFontSize;
@@ -1266,6 +1308,14 @@ class _OverlayBox extends StatelessWidget {
     return best;
   }
 
+  String _verticalText(String text) {
+    final vertical = text.runes
+        .map((rune) => String.fromCharCode(rune))
+        .where((char) => char.trim().isNotEmpty)
+        .join('\n');
+    return vertical.isEmpty ? text : vertical;
+  }
+
   void _showMenuDetail(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -1273,7 +1323,7 @@ class _OverlayBox extends StatelessWidget {
       isScrollControlled: true,
       builder: (_) => isDummy
           ? LegacyMenuDetailSheet(item: item)
-          : _MenuDetailSheet(item: item),
+          : _MenuDetailSheet(item: item, recommendation: recommendation),
     );
   }
 
@@ -1314,14 +1364,17 @@ class _OverlayBox extends StatelessWidget {
         ? math.max(rect.height, 12.0)
         : math.max(rect.height, 24.0);
     final label = overlayItem.text;
+    final displayLabel = _isVerticalSplit ? _verticalText(label) : label;
     final color = _overlayColor;
     const recommendedColor = Color(0xFFFFC107);
     const badgeRowHeight = _overlayBadgeRowHeight;
     const sideBadgeWidth = 24.0;
     const sideBadgeGap = 4.0;
-    final showTopBadges = _showsRiskBadge && !_isVerticalSplit;
+    final showTopBadges =
+        (_showsRiskBadge || _showsPriceBadge) && !_isVerticalSplit;
     final showSideBadges =
-        _isVerticalSplit && (_showsRiskBadge || isRecommended);
+        _isVerticalSplit &&
+        (_showsRiskBadge || isRecommended || _showsPriceBadge);
     final sideBadgeSpace = showSideBadges ? sideBadgeWidth + sideBadgeGap : 0.0;
     final horizontalPadding = originalWidth < 64 ? 4.0 : 6.0;
     final rightTextPadding = horizontalPadding + _overlayTextRightSafetyPadding;
@@ -1329,7 +1382,13 @@ class _OverlayBox extends StatelessWidget {
     final verticalPadding = originalHeight < 32 ? 3.0 : 4.0;
     final badgeWidth = !showTopBadges
         ? 0.0
-        : _measureBadgeWidth(_risk.label, textDirection) +
+        : (_showsRiskBadge
+                  ? _measureBadgeWidth(_risk.label, textDirection)
+                  : 0.0) +
+              (_showsPriceBadge
+                  ? (_showsRiskBadge ? _overlayBadgeSpacing : 0.0) +
+                        _measureBadgeWidth('가격', textDirection)
+                  : 0.0) +
               (isRecommended
                   ? _overlayBadgeSpacing +
                         _measureBadgeWidth('추천 메뉴', textDirection)
@@ -1340,9 +1399,10 @@ class _OverlayBox extends StatelessWidget {
       height: 1.1,
     );
     final singleLinePainter = _measureText(
-      label,
+      displayLabel,
       probeTextStyle,
       textDirection,
+      maxLines: _isVerticalSplit ? null : 1,
     );
     final desiredWidth = math.max(
       math.max(
@@ -1365,20 +1425,23 @@ class _OverlayBox extends StatelessWidget {
             .clamp(0.0, math.max(0.0, canvasWidth - totalOverlayWidth))
             .toDouble();
     final wrapsToTwoLines = desiredWidth > canvasWidth;
+    final effectiveMaxLines = _isVerticalSplit
+        ? null
+        : (wrapsToTwoLines ? 2 : 1);
     final availableTextWidth = math.max(
       1.0,
       overlayWidth - horizontalPadding - rightTextPadding - priceIconSpace,
     );
-    final wrappedPainter = wrapsToTwoLines
+    final wrappedPainter = !_isVerticalSplit && wrapsToTwoLines
         ? _measureText(
-            label,
+            displayLabel,
             probeTextStyle,
             textDirection,
             maxWidth: availableTextWidth,
             maxLines: 2,
           )
         : null;
-    final overlayHeight = wrapsToTwoLines
+    final overlayHeight = wrapsToTwoLines && !_isVerticalSplit
         ? math.max(originalHeight, wrappedPainter!.height + verticalPadding * 2)
         : originalHeight;
     final widthExpansion = math.max(0.0, overlayWidth - originalWidth);
@@ -1389,12 +1452,12 @@ class _OverlayBox extends StatelessWidget {
           (wrapsToTwoLines ? 0.0 : math.min(8.0, widthExpansion * 0.12)),
     );
     final fittedFontSize = _fitFontSize(
-      label,
+      displayLabel,
       textDirection,
       maxWidth: availableTextWidth,
       maxHeight: textHeightBudget,
-      maxLines: wrapsToTwoLines ? 2 : 1,
-      minFontSize: _isVerticalSplit ? 8.0 : 12.0,
+      maxLines: effectiveMaxLines,
+      minFontSize: _isVerticalSplit ? 6.0 : 12.0,
     );
     final textStyle = GoogleFonts.blackHanSans(
       color: Colors.white,
@@ -1402,11 +1465,11 @@ class _OverlayBox extends StatelessWidget {
       height: 1.1,
     );
     final finalTextPainter = _measureText(
-      label,
+      displayLabel,
       textStyle,
       textDirection,
       maxWidth: availableTextWidth,
-      maxLines: wrapsToTwoLines ? 2 : 1,
+      maxLines: effectiveMaxLines,
     );
     final resolvedOverlayHeight = _isVerticalSplit
         ? overlayHeight
@@ -1439,12 +1502,26 @@ class _OverlayBox extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          _InfoBadge(
-                            backgroundColor: color,
-                            foregroundColor: Colors.white,
-                            icon: _allergyIcon(_risk),
-                            label: _risk.label,
-                          ),
+                          if (_showsRiskBadge)
+                            _InfoBadge(
+                              backgroundColor: color,
+                              foregroundColor: Colors.white,
+                              icon: _allergyIcon(_risk),
+                              label: _risk.label,
+                            ),
+                          if (_showsPriceBadge) ...[
+                            if (_showsRiskBadge)
+                              const SizedBox(width: _overlayBadgeSpacing),
+                            _InfoBadge(
+                              backgroundColor: const Color(0xFF42A5F5),
+                              foregroundColor: Colors.white,
+                              icon: Icons.payments_rounded,
+                              label: '가격',
+                              shadowColor: const Color(
+                                0xFF42A5F5,
+                              ).withValues(alpha: 0.30),
+                            ),
+                          ],
                           if (isRecommended) ...[
                             const SizedBox(width: _overlayBadgeSpacing),
                             _InfoBadge(
@@ -1473,6 +1550,7 @@ class _OverlayBox extends StatelessWidget {
                       riskColor: color,
                       riskIcon: _showsRiskBadge ? _allergyIcon(_risk) : null,
                       isRecommended: isRecommended,
+                      showPrice: _showsPriceBadge,
                     ),
                     const SizedBox(width: sideBadgeGap),
                   ],
@@ -1520,11 +1598,14 @@ class _OverlayBox extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              label,
-                              maxLines: wrapsToTwoLines ? 2 : 1,
-                              softWrap: wrapsToTwoLines,
+                              displayLabel,
+                              maxLines: effectiveMaxLines,
+                              softWrap: !_isVerticalSplit && wrapsToTwoLines,
                               overflow: TextOverflow.visible,
                               textScaler: TextScaler.noScaling,
+                              textAlign: _isVerticalSplit
+                                  ? TextAlign.center
+                                  : TextAlign.start,
                               style: textStyle,
                             ),
                           ),
@@ -1565,6 +1646,7 @@ class _VerticalSideBadges extends StatelessWidget {
     required this.riskColor,
     required this.riskIcon,
     required this.isRecommended,
+    required this.showPrice,
   });
 
   final double height;
@@ -1572,6 +1654,7 @@ class _VerticalSideBadges extends StatelessWidget {
   final Color riskColor;
   final IconData? riskIcon;
   final bool isRecommended;
+  final bool showPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -1589,6 +1672,13 @@ class _VerticalSideBadges extends StatelessWidget {
           foregroundColor: Colors.black,
           icon: Icons.star_rounded,
           label: '추천 메뉴',
+        ),
+      if (showPrice)
+        const _VerticalInfoBadge(
+          backgroundColor: Color(0xFF42A5F5),
+          foregroundColor: Colors.white,
+          icon: Icons.payments_rounded,
+          label: '가격',
         ),
     ];
 
@@ -2082,42 +2172,212 @@ class _PriceConversionDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF1F1F1F),
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text(
-        '환산 가격',
-        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            rawPrice.trim().isEmpty
-                ? convertedPrice
-                : '$rawPrice ≈ $convertedPrice',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              height: 1.35,
+    final hasRawPrice = rawPrice.trim().isNotEmpty;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 380),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFF1F1F1F),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Colors.white10),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF42A5F5).withValues(alpha: 0.18),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.payments_rounded,
+                        color: Color(0xFF64B5F6),
+                        size: 23,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '환산 가격',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          SizedBox(height: 3),
+                          Text(
+                            '촬영된 가격을 기준으로 계산했어요.',
+                            style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 12,
+                              height: 1.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                if (hasRawPrice) ...[
+                  _PriceValueRow(label: '원본 가격', value: rawPrice.trim()),
+                  const SizedBox(height: 12),
+                ],
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF42A5F5).withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFF64B5F6).withValues(alpha: 0.38),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '예상 환산 금액',
+                        style: TextStyle(
+                          color: Color(0xFF90CAF9),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        convertedPrice,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          height: 1.15,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline_rounded,
+                        color: Colors.white54,
+                        size: 17,
+                      ),
+                      SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          '고정 환율을 기준으로 계산한 참고용 금액이에요. 실제 결제 금액은 환율, 수수료, 매장 정책에 따라 달라질 수 있어요.',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12.5,
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF42A5F5),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      '확인',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 14),
-          const Text(
-            'AI가 추정한 참고용 환산 금액입니다. 실제 결제 금액이나 환율과 다를 수 있습니다.',
-            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+        ),
+      ),
+    );
+  }
+}
+
+class _PriceValueRow extends StatelessWidget {
+  const _PriceValueRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white54,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('확인'),
-        ),
-      ],
     );
   }
 }
@@ -2183,9 +2443,10 @@ class _InfoBadge extends StatelessWidget {
 }
 
 class _MenuDetailSheet extends StatefulWidget {
-  const _MenuDetailSheet({required this.item});
+  const _MenuDetailSheet({required this.item, required this.recommendation});
 
   final AnalyzedMenuItem item;
+  final RecommendedMenuItem? recommendation;
 
   @override
   State<_MenuDetailSheet> createState() => _MenuDetailSheetState();
@@ -2195,6 +2456,7 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
   late Future<MenuDetail> _detailFuture;
 
   AnalyzedMenuItem get _item => widget.item;
+  RecommendedMenuItem? get _recommendation => widget.recommendation;
 
   @override
   void initState() {
@@ -2395,17 +2657,19 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
                 (ingredient) => Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
-                    vertical: 6,
+                    vertical: 7,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.07),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white12),
+                    color: const Color(0xFFFFF5F7).withValues(alpha: 0.13),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: const Color(0xFFF8A8B8).withValues(alpha: 0.38),
+                    ),
                   ),
                   child: Text(
                     ingredient,
                     style: const TextStyle(
-                      color: Colors.white70,
+                      color: Color(0xFFFFE4EC),
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
@@ -2415,6 +2679,79 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
               .toList(),
         ),
       ],
+    );
+  }
+
+  String _recommendationReasonText(RecommendedMenuItem recommendation) {
+    final isCategory = recommendation.isCategoryRecommended;
+    final isTaste = recommendation.isTasteRecommended;
+
+    if (isCategory && isTaste) {
+      return '선택한 식성 기준과 맛 취향이 모두 잘 맞아 추천된 메뉴예요.';
+    }
+    if (isCategory) {
+      return '선택한 식성 기준과 잘 맞아 추천된 메뉴예요.';
+    }
+    if (isTaste) {
+      return '선택한 맛 취향과 잘 맞아 추천된 메뉴예요.';
+    }
+    return '사용자 설정을 바탕으로 추천된 메뉴예요.';
+  }
+
+  Widget _buildRecommendationSection(RecommendedMenuItem recommendation) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFC107).withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFFFD54F).withValues(alpha: 0.42),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFD54F).withValues(alpha: 0.20),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.star_rounded,
+              color: Color(0xFFFFD54F),
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '추천 메뉴',
+                  style: TextStyle(
+                    color: Color(0xFFFFD54F),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  _recommendationReasonText(recommendation),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2436,6 +2773,7 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
             final detail = snapshot.data;
             final error = snapshot.error;
             final isLoading = snapshot.connectionState != ConnectionState.done;
+            final recommendation = _recommendation;
             final errorMessage = error is MenuDetailException
                 ? error.message
                 : error != null
@@ -2465,13 +2803,32 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
                   const SizedBox(height: 16),
                   _buildImageSection(detail),
                   const SizedBox(height: 16),
-                  _InfoBadge(
-                    backgroundColor: color.withValues(alpha: 0.18),
-                    foregroundColor: color,
-                    icon: icon,
-                    label: _item.allergyRisk.label,
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _InfoBadge(
+                        backgroundColor: color.withValues(alpha: 0.18),
+                        foregroundColor: color,
+                        icon: icon,
+                        label: _item.allergyRisk.label,
+                      ),
+                      if (recommendation != null)
+                        _InfoBadge(
+                          backgroundColor: const Color(
+                            0xFFFFC107,
+                          ).withValues(alpha: 0.16),
+                          foregroundColor: const Color(0xFFFFD54F),
+                          icon: Icons.star_rounded,
+                          label: '추천 메뉴',
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 16),
+                  if (recommendation != null) ...[
+                    _buildRecommendationSection(recommendation),
+                    const SizedBox(height: 16),
+                  ],
                   Text(
                     _titleText(detail),
                     style: const TextStyle(
