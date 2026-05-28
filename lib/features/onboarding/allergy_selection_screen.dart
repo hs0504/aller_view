@@ -38,6 +38,23 @@ class _AllergySelectionScreenState extends State<AllergySelectionScreen> {
     setState(() => _isLoading = false);
   }
 
+  void _showAllergyInfoSheet(BuildContext context, int index) {
+    final item = allergyItems[index];
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _AllergyInfoSheet(
+        item: item,
+        isSelected: selectedItems.contains(index),
+        onRegister: () {
+          setState(() => selectedItems.add(index));
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
   Future<void> _onComplete() async {
     if (_isSaving) return;
     setState(() => _isSaving = true);
@@ -223,6 +240,41 @@ class _AllergySelectionScreenState extends State<AllergySelectionScreen> {
                                     ),
                                   ),
                                 ),
+                                if (item['description'] != null)
+                                  Positioned(
+                                    top: 6,
+                                    left: 6,
+                                    child: GestureDetector(
+                                      onTap: () => _showAllergyInfoSheet(
+                                        context,
+                                        index,
+                                      ),
+                                      child: Container(
+                                        width: 22,
+                                        height: 22,
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? Colors.white
+                                                  .withValues(alpha: 0.28)
+                                              : const Color(0xFFF06292)
+                                                  .withValues(alpha: 0.15),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          '?',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            color: isSelected
+                                                ? Colors.white
+                                                : const Color(0xFFF06292),
+                                            height: 1,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
@@ -275,6 +327,296 @@ class _AllergySelectionScreenState extends State<AllergySelectionScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _AllergyInfoSheet extends StatelessWidget {
+  const _AllergyInfoSheet({
+    required this.item,
+    required this.isSelected,
+    required this.onRegister,
+  });
+
+  final Map<String, String?> item;
+  final bool isSelected;
+  final VoidCallback onRegister;
+
+  @override
+  Widget build(BuildContext context) {
+    final foodExamples = (item['foodExamples'] ?? '')
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.paddingOf(context).bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(top: 12, bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF5F7),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFFCE4EC)),
+                    ),
+                    child: Center(
+                      child: Text(
+                        item['icon']!,
+                        style: const TextStyle(fontSize: 30),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item['name']!,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF2D2D2D),
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF5F7),
+                            borderRadius: BorderRadius.circular(100),
+                            border: Border.all(
+                              color: const Color(0xFFFCE4EC),
+                            ),
+                          ),
+                          child: const Text(
+                            '알레르기 유발 물질',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFF06292),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Divider(height: 1, color: Color(0xFFF0F0F0)),
+            const SizedBox(height: 20),
+            // Description
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Section label
+                  Row(
+                    children: [
+                      Container(
+                        width: 3,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF06292),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        '설명',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF2D2D2D),
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Description card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFAFAFA),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFEEEEEE)),
+                    ),
+                    child: Text(
+                      item['description'] ?? '',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF444444),
+                        height: 1.85,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (foodExamples.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Section label
+                    Row(
+                      children: [
+                        Container(
+                          width: 3,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF06292),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          '주로 포함된 식품',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF2D2D2D),
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: foodExamples
+                          .map(
+                            (e) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 7,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF5F7),
+                                border: Border.all(
+                                  color: const Color(0xFFFCE4EC),
+                                ),
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Text(
+                                e,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFF06292),
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+            // Action button
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: isSelected
+                  ? Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF5F7),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFFCE4EC)),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.check_circle_rounded,
+                            color: Color(0xFFF06292),
+                            size: 18,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            '이미 등록된 항목이에요',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFF06292),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: onRegister,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF06292),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          '이 항목 알레르기로 등록하기',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
