@@ -55,3 +55,7 @@ app.*.map.json
 service-account*.json
 google-services.json
 GoogleService-Info.plist
+
+# Design analysis files (local only)
+design_mockup.html
+loading_analysis.html
