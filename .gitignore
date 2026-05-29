@@ -63,3 +63,6 @@ allergy_desc_analysis.html
 
 # Claude Code config (personal dev tool)
 CLAUDE.md
+
+# Temporary AI-generated image files (local only)
+.codex_tmp/

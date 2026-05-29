@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -55,6 +54,7 @@ class MenuPhotoPreviewScreen extends StatefulWidget {
 
 class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
   static const _minimumProcessingOverlayDuration = Duration(milliseconds: 450);
+  static const _minimumGalleryPreviewLoadingDuration = Duration(seconds: 3);
 
   late final Future<_PreviewData> _previewDataFuture;
   bool _isAnalyzing = false;
@@ -72,16 +72,19 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
   }
 
   Future<_PreviewData> _loadPreviewData() async {
+    final startedAt = DateTime.now();
     final sourceBytes = await widget.photo.readAsBytes();
     if (widget.source == MenuPhotoSource.camera) {
       return _buildPreviewData(sourceBytes);
     }
 
-    return compute(
+    final preview = await compute(
       _buildGalleryPreviewData,
       sourceBytes,
       debugLabel: 'menu_photo_preview',
     );
+    await _waitForMinimum(startedAt, _minimumGalleryPreviewLoadingDuration);
+    return preview;
   }
 
   Future<void> _startOcr(
@@ -206,9 +209,11 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
         future: _previewDataFuture,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            );
+            return widget.source == MenuPhotoSource.gallery
+                ? const _GalleryPhotoLoadingView()
+                : const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  );
           }
 
           final preview = snapshot.data!;
@@ -383,6 +388,133 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _GalleryPhotoLoadingView extends StatefulWidget {
+  const _GalleryPhotoLoadingView();
+
+  @override
+  State<_GalleryPhotoLoadingView> createState() =>
+      _GalleryPhotoLoadingViewState();
+}
+
+class _GalleryPhotoLoadingViewState extends State<_GalleryPhotoLoadingView>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1920),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOut,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, (1 - value) * 14),
+          child: child,
+        ),
+      ),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _GalleryObserveImage(),
+              const SizedBox(height: 24),
+              _GalleryLoadingText(animation: _controller),
+              const SizedBox(height: 8),
+              const Text(
+                '잠시만 기다려 주세요',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 13,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GalleryLoadingText extends StatelessWidget {
+  const _GalleryLoadingText({required this.animation});
+
+  final Animation<double> animation;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        final visibleDots = (animation.value * 4).floor().clamp(0, 3);
+        return Text.rich(
+          TextSpan(
+            text: '갤러리에서 사진 불러오는 중',
+            children: [
+              for (var i = 0; i < 3; i++)
+                TextSpan(
+                  text: ' .',
+                  style: TextStyle(
+                    color: i < visibleDots ? Colors.white : Colors.transparent,
+                  ),
+                ),
+            ],
+          ),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            height: 1.35,
+            letterSpacing: 0.1,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _GalleryObserveImage extends StatelessWidget {
+  const _GalleryObserveImage();
+
+  static const double _aspectRatio = 480 / 410;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxWidth = MediaQuery.sizeOf(context).width * 0.80;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: AspectRatio(
+        aspectRatio: _aspectRatio,
+        child: Image.asset(
+          'assets/images/gallery_observe_static.png',
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.none,
+        ),
       ),
     );
   }

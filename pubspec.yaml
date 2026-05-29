@@ -80,6 +80,9 @@ flutter:
 
   assets:
     - .env
+    - assets/images/allerview_logo_transparent.png
+    - assets/images/gallery_observe_static.png
+    - assets/images/splash_mascots.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

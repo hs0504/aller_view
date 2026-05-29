@@ -21,7 +21,7 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(milliseconds: 1500));
+    await Future.delayed(const Duration(milliseconds: 2800));
     if (!mounted) return;
 
     final isSetup = await UserPrefs.isSetupComplete();
@@ -32,8 +32,7 @@ class _SplashScreenState extends State<SplashScreen> {
       destination = const NicknameScreen();
     } else {
       final isLoggedIn = await AuthService().isLoggedIn();
-      destination =
-          isLoggedIn ? const MainHomeScreen() : const AuthScreen();
+      destination = isLoggedIn ? const MainHomeScreen() : const AuthScreen();
     }
 
     if (!mounted) return;
@@ -54,6 +53,7 @@ class _SplashScreenState extends State<SplashScreen> {
     const Color pastelRedPink3 = Color(0xFFFFEBEE);
     const Color pastelRedPink2 = Color(0xFFF8A8B8);
     const Color pastelRedPink1 = Color(0xFFF06292);
+    final screenWidth = MediaQuery.sizeOf(context).width;
 
     return Scaffold(
       body: Container(
@@ -66,44 +66,60 @@ class _SplashScreenState extends State<SplashScreen> {
             end: Alignment.bottomRight,
           ),
         ),
-        child: Column(
-          children: [
-            const Spacer(),
-            const Column(
-              children: [
-                Text(
-                  '개인 맞춤형 알레르기 위험 식재료 안내 서비스',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.white70,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                SizedBox(height: 12),
-                Text(
-                  'Aller-View',
-                  style: TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-              ],
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeOut,
+          builder: (context, value, child) => Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, (1 - value) * 18),
+              child: child,
             ),
-            const Spacer(),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 60),
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+          child: Column(
+            children: [
+              const Spacer(),
+              Image.asset(
+                'assets/images/splash_mascots.png',
+                width: screenWidth * 0.75,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 42),
+                child: Image.asset(
+                  'assets/images/allerview_logo_transparent.png',
+                  width: screenWidth * 0.68,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              const Text(
+                '개인 맞춤형 알레르기 위험 식재료 안내 서비스',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white70,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const Spacer(),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 60),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
