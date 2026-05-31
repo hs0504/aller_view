@@ -57,7 +57,13 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => const _MenuImageSourceSheet(),
+      builder: (_) => _AnalysisFlowSheet(
+        currentLanguageCode: _departureLanguage,
+        onLanguageChanged: (code) async {
+          await UserPrefs.saveLanguageSettings(departureLanguage: code);
+          if (mounted) setState(() => _departureLanguage = code);
+        },
+      ),
     );
 
     if (!mounted || source == null) return;
@@ -587,71 +593,457 @@ class _AllergyBottomSheet extends StatelessWidget {
 
 enum _MenuImageSource { camera, gallery }
 
-class _MenuImageSourceSheet extends StatelessWidget {
-  const _MenuImageSourceSheet();
+// ──────────────────────────────────────────────────────────────────────────
+// 언어 확인 + 촬영 방법 선택 멀티스텝 바텀시트
+// ──────────────────────────────────────────────────────────────────────────
+
+enum _AnalysisFlowStep { languageConfirm, languageSelect, sourceSelect }
+
+class _AnalysisFlowSheet extends StatefulWidget {
+  const _AnalysisFlowSheet({
+    required this.currentLanguageCode,
+    required this.onLanguageChanged,
+  });
+
+  final String currentLanguageCode;
+  final ValueChanged<String> onLanguageChanged;
+
+  @override
+  State<_AnalysisFlowSheet> createState() => _AnalysisFlowSheetState();
+}
+
+class _AnalysisFlowSheetState extends State<_AnalysisFlowSheet> {
+  late String _selectedCode;
+  _AnalysisFlowStep _step = _AnalysisFlowStep.languageConfirm;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCode = widget.currentLanguageCode;
+  }
+
+  LanguageOption get _currentOption => departureLanguageOptions.firstWhere(
+    (opt) => opt.code == _selectedCode,
+    orElse: () => departureLanguageOptions.first,
+  );
+
+  void _onLanguageSelected(String code) {
+    setState(() {
+      _selectedCode = code;
+      _step = _AnalysisFlowStep.languageConfirm;
+    });
+  }
+
+  void _onConfirmLanguage() {
+    if (_selectedCode != widget.currentLanguageCode) {
+      widget.onLanguageChanged(_selectedCode);
+    }
+    setState(() => _step = _AnalysisFlowStep.sourceSelect);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
       child: Container(
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        padding: EdgeInsets.fromLTRB(
-          20,
-          12,
-          20,
-          MediaQuery.paddingOf(context).bottom + 20,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.04),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          ),
+          child: switch (_step) {
+            _AnalysisFlowStep.languageConfirm => _LanguageConfirmView(
+              key: const ValueKey('confirm'),
+              option: _currentOption,
+              bottomPad: bottomPad,
+              onConfirm: _onConfirmLanguage,
+              onChangeLanguage: () =>
+                  setState(() => _step = _AnalysisFlowStep.languageSelect),
+            ),
+            _AnalysisFlowStep.languageSelect => _LanguageSelectView(
+              key: const ValueKey('select'),
+              selectedCode: _selectedCode,
+              bottomPad: bottomPad,
+              onBack: () =>
+                  setState(() => _step = _AnalysisFlowStep.languageConfirm),
+              onSelect: _onLanguageSelected,
+            ),
+            _AnalysisFlowStep.sourceSelect => _SourceSelectView(
+              key: const ValueKey('source'),
+              option: _currentOption,
+              bottomPad: bottomPad,
+            ),
+          },
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+      ),
+    );
+  }
+}
+
+class _LanguageConfirmView extends StatelessWidget {
+  const _LanguageConfirmView({
+    super.key,
+    required this.option,
+    required this.bottomPad,
+    required this.onConfirm,
+    required this.onChangeLanguage,
+  });
+
+  final LanguageOption option;
+  final double bottomPad;
+  final VoidCallback onConfirm;
+  final VoidCallback onChangeLanguage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 14, 24, bottomPad + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
             ),
-            const SizedBox(height: 20),
-            const Text(
-              '메뉴판 이미지 선택',
+          ),
+          const SizedBox(height: 22),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '메뉴판 언어 확인',
               style: TextStyle(
-                color: Color(0xFF2D2D2D),
-                fontSize: 18,
+                fontSize: 20,
                 fontWeight: FontWeight.w800,
+                color: Color(0xFF1A1A1A),
+                letterSpacing: -0.3,
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              '분석할 메뉴판 이미지를 가져올 방법을 선택해 주세요.',
+          ),
+          const SizedBox(height: 6),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '분석할 메뉴판의 언어를 확인해 주세요.',
               style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 13,
+                fontSize: 14,
+                color: Color(0xFF9E9E9E),
                 height: 1.4,
               ),
             ),
-            const SizedBox(height: 18),
-            _ImageSourceOption(
-              icon: Icons.photo_camera_rounded,
-              iconColor: const Color(0xFFF06292),
-              title: '카메라로 촬영',
-              description: '지금 메뉴판을 촬영해서 바로 분석해요.',
-              onTap: () => Navigator.pop(context, _MenuImageSource.camera),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF5F7),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFFCE4EC)),
             ),
-            const SizedBox(height: 10),
-            _ImageSourceOption(
-              icon: Icons.photo_library_rounded,
-              iconColor: const Color(0xFF42A5F5),
-              title: '갤러리에서 선택',
-              description: '저장된 메뉴판 사진을 불러와 분석해요.',
-              onTap: () => Navigator.pop(context, _MenuImageSource.gallery),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF06292).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.info_outline_rounded,
+                    size: 16,
+                    color: Color(0xFFF06292),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    '메뉴판 언어가 실제 사진과 다르면 번역이나 알레르기 분석 결과가 부정확할 수 있어요.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: Color(0xFF6B6B6B),
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 28),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF0F4),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: const Color(0xFFF06292).withValues(alpha: 0.25),
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              children: [
+                Text(option.flag, style: const TextStyle(fontSize: 54)),
+                const SizedBox(height: 12),
+                Text(
+                  option.name,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1A1A1A),
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  option.nativeName,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF9E9E9E),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onChangeLanguage,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFF06292),
+                side: BorderSide(
+                  color: const Color(0xFFF06292).withValues(alpha: 0.55),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+              label: const Text(
+                '다른 언어로 변경하기',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onConfirm,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF06292),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              icon: const Icon(Icons.check_rounded, size: 18),
+              label: const Text(
+                '이 언어로 분석 시작',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LanguageSelectView extends StatelessWidget {
+  const _LanguageSelectView({
+    super.key,
+    required this.selectedCode,
+    required this.bottomPad,
+    required this.onBack,
+    required this.onSelect,
+  });
+
+  final String selectedCode;
+  final double bottomPad;
+  final VoidCallback onBack;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final childAspectRatio = MediaQuery.sizeOf(context).width < 380
+        ? 0.78
+        : 0.88;
+    final sheetHeight = MediaQuery.sizeOf(context).height * 0.82;
+
+    return SizedBox(
+      height: sheetHeight,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, 14, 20, bottomPad + 20),
+        child: Column(
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: onBack,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.arrow_back_rounded,
+                      size: 20,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  '메뉴판 언어 변경',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1A1A1A),
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.only(bottom: 4),
+                physics: const BouncingScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  childAspectRatio: childAspectRatio,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                itemCount: departureLanguageOptions.length,
+                itemBuilder: (_, index) {
+                  final opt = departureLanguageOptions[index];
+                  final isSelected = opt.code == selectedCode;
+                  return GestureDetector(
+                    onTap: () => onSelect(opt.code),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFFF06292)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: isSelected
+                            ? null
+                            : Border.all(color: const Color(0xFFEEEEEE)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: isSelected
+                                ? const Color(
+                                    0xFFF06292,
+                                  ).withValues(alpha: 0.30)
+                                : Colors.black.withValues(alpha: 0.04),
+                            blurRadius: isSelected ? 10 : 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        children: [
+                          Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  opt.flag,
+                                  style: const TextStyle(fontSize: 26),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  opt.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  opt.nativeName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: isSelected
+                                        ? Colors.white.withValues(alpha: 0.75)
+                                        : Colors.black38,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (isSelected)
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Container(
+                                width: 18,
+                                height: 18,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.check,
+                                  size: 12,
+                                  color: Color(0xFFF06292),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -660,17 +1052,93 @@ class _MenuImageSourceSheet extends StatelessWidget {
   }
 }
 
-class _ImageSourceOption extends StatelessWidget {
-  const _ImageSourceOption({
+class _SourceSelectView extends StatelessWidget {
+  const _SourceSelectView({
+    super.key,
+    required this.option,
+    required this.bottomPad,
+  });
+
+  final LanguageOption option;
+  final double bottomPad;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 14, 24, bottomPad + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 22),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '촬영 방법 선택',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF1A1A1A),
+                letterSpacing: -0.3,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Row(
+              children: [
+                Text(option.flag, style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${option.name} 메뉴판을 분석합니다.',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF9E9E9E),
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          _SourceOption(
+            icon: Icons.camera_alt_rounded,
+            title: '카메라로 촬영',
+            description: '지금 바로 메뉴판을 촬영해서 분석해요.',
+            onTap: () => Navigator.pop(context, _MenuImageSource.camera),
+          ),
+          const SizedBox(height: 12),
+          _SourceOption(
+            icon: Icons.photo_library_rounded,
+            title: '갤러리에서 선택',
+            description: '저장된 메뉴판 사진을 불러와 분석해요.',
+            onTap: () => Navigator.pop(context, _MenuImageSource.gallery),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SourceOption extends StatelessWidget {
+  const _SourceOption({
     required this.icon,
-    required this.iconColor,
     required this.title,
     required this.description,
     required this.onTap,
   });
 
   final IconData icon;
-  final Color iconColor;
   final String title;
   final String description;
   final VoidCallback onTap;
@@ -679,24 +1147,24 @@ class _ImageSourceOption extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: const Color(0xFFFFF5F7),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(18),
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 50,
+                height: 50,
                 decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.13),
+                  color: const Color(0xFFF06292).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, color: iconColor, size: 22),
+                child: Icon(icon, color: const Color(0xFFF06292), size: 24),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -704,28 +1172,27 @@ class _ImageSourceOption extends StatelessWidget {
                     Text(
                       title,
                       style: const TextStyle(
-                        color: Color(0xFF2D2D2D),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1A1A1A),
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       description,
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 12,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF9E9E9E),
                         height: 1.35,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
               const Icon(
                 Icons.arrow_forward_ios_rounded,
-                color: Color(0xFFBDBDBD),
-                size: 15,
+                size: 14,
+                color: Color(0xFFF06292),
               ),
             ],
           ),

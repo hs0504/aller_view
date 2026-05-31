@@ -8,6 +8,7 @@ import '../../core/api/analyze_menu_client.dart';
 import '../../core/ocr/ocr_result.dart';
 import '../../core/ocr/vision_api_client.dart';
 import '../../core/storage/user_prefs.dart';
+import 'loading_demo_screen.dart';
 import 'menu_image_normalizer.dart';
 import 'ocr_result_screen.dart';
 import 'photo_quality_analyzer.dart';
@@ -126,12 +127,7 @@ class _MenuPhotoPreviewScreenState extends State<MenuPhotoPreviewScreen> {
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => OcrResultScreen(
-            imageBytes: imageBytes,
-            imageWidth: imageWidth,
-            imageHeight: imageHeight,
-            previewOnly: true,
-          ),
+          builder: (_) => LoadingDemoScreen(imageBytes: imageBytes),
         ),
       );
     } finally {

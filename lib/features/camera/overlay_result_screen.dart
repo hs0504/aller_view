@@ -672,7 +672,7 @@ class _OverlayGuideItem {
       if (menuItem != null)
         _OverlayGuideItem(
           title: '메뉴 상세정보',
-          message: '라벨을 터치하면 메뉴 상세정보를 볼 수 있어요.',
+          message: '오버레이 영역을 터치하면 메뉴 상세정보를 볼 수 있어요.',
           icon: Icons.touch_app_rounded,
           color: const Color(0xFFFF6F91),
           targetRect: menuItem.rect,
@@ -785,7 +785,7 @@ class _OverlayGuideLayerState extends State<_OverlayGuideLayer> {
       8.0 * _scale,
       math.max(8.0 * _scale, widget.canvasWidth - iconSize - 8.0 * _scale),
     );
-    final iconTop = (rect.bottom + 8.0 * _scale).clamp(
+    final iconTop = (rect.center.dy - iconSize / 2).clamp(
       8.0 * _scale,
       math.max(8.0 * _scale, widget.canvasHeight - iconSize - 8.0 * _scale),
     );
@@ -1343,6 +1343,7 @@ class _OverlayBox extends StatelessWidget {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      isDismissible: false,
       builder: (_) => isDummy
           ? LegacyMenuDetailSheet(item: item)
           : _MenuDetailSheet(item: item, recommendation: recommendation),
@@ -2574,17 +2575,27 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Center(
-                      child: Container(
-                        width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(2),
+                    Row(
+                      children: [
+                        const Spacer(),
+                        Container(
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
-                      ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close_rounded),
+                          color: Colors.white70,
+                          tooltip: '닫기',
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 4),
                     _buildImageSection(detail),
                     const SizedBox(height: 16),
                     Wrap(
@@ -2852,17 +2863,27 @@ class LegacyMenuDetailSheet extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
+                Row(
+                  children: [
+                    const Spacer(),
+                    Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded),
+                      color: Colors.white70,
+                      tooltip: '닫기',
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 4),
                 Container(
                   width: double.infinity,
                   height: 160,
