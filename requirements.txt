@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pydantic
+google-cloud-translate
+python-dotenv
+google-generativeai

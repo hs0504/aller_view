@@ -1,0 +1,12 @@
+.env
+google-key.json
+
+venv/
+__pycache__/
+*.pyc
+
+.DS_Store
+.vscode/
+.idea/
+
+*.log
