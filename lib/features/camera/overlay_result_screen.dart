@@ -25,15 +25,14 @@ IconData _allergyIcon(AllergyRisk risk) => switch (risk) {
   AllergyRisk.unknown => Icons.help_outline_rounded,
 };
 
-const double _overlayBadgeRowHeight = 24.0;
 const double _overlayBadgeHeight = 20.0;
 const double _overlayBadgeHorizontalPadding = 8.0;
 const double _overlayBadgeIconSize = 11.0;
 const double _overlayBadgeIconGap = 3.0;
 const double _overlayBadgeFontSize = 10.0;
-const double _overlayBadgeSpacing = 4.0;
 const double _overlayTextRightSafetyPadding = 6.0;
 const double _overlayTextWidthSafetyBuffer = 2.0;
+const double _menuDetailSheetHeightRatio = 0.82;
 
 class OverlayDebugInfo {
   const OverlayDebugInfo({
@@ -468,6 +467,7 @@ class _OverlayImageView extends StatelessWidget {
                     isDummy: isDummy,
                     canvasWidth: canvasWidth,
                   ),
+                _OverlayColorLegend(canvasWidth: canvasWidth),
                 if (guideItems.isNotEmpty)
                   _OverlayGuideLayer(
                     items: guideItems,
@@ -520,6 +520,115 @@ class _ResolvedOverlayItem {
   final String? splitDirection;
 }
 
+class _OverlayColorLegend extends StatelessWidget {
+  const _OverlayColorLegend({required this.canvasWidth});
+
+  final double canvasWidth;
+
+  double get _scale => math.max(1.0, canvasWidth / 390.0);
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = _scale;
+
+    return Positioned(
+      left: 12 * scale,
+      top: 12 * scale,
+      child: IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.58),
+            borderRadius: BorderRadius.circular(10 * scale),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.16),
+              width: 1 * scale,
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: 10 * scale,
+              vertical: 8 * scale,
+            ),
+            child: Wrap(
+              spacing: 10 * scale,
+              runSpacing: 6 * scale,
+              children: [
+                _OverlayLegendItem(
+                  color: const Color(0xFFE53935),
+                  label: '위험',
+                  scale: scale,
+                ),
+                _OverlayLegendItem(
+                  color: const Color(0xFF43A047),
+                  label: '안전',
+                  scale: scale,
+                ),
+                _OverlayLegendItem(
+                  color: const Color(0xFFFFC107),
+                  label: '추천 메뉴',
+                  scale: scale,
+                ),
+                _OverlayLegendItem(
+                  color: const Color(0xFF42A5F5),
+                  label: '가격',
+                  scale: scale,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OverlayLegendItem extends StatelessWidget {
+  const _OverlayLegendItem({
+    required this.color,
+    required this.label,
+    required this.scale,
+  });
+
+  final Color color;
+  final String label;
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7 * scale,
+          height: 7 * scale,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.35),
+                blurRadius: 5 * scale,
+                spreadRadius: 1 * scale,
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: 4 * scale),
+        Text(
+          label,
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 9 * scale,
+            fontWeight: FontWeight.w700,
+            height: 1.0,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _OverlayGuideItem {
   const _OverlayGuideItem({
     required this.title,
@@ -548,9 +657,9 @@ class _OverlayGuideItem {
     }
 
     final menuItem = firstWhere((item) => item.item.itemType == 'menu_name');
-    final riskItem = firstWhere(_hasVisibleRiskBadge);
+    final riskItem = firstWhere(_hasVisibleRiskCue);
     final recommendedItem = firstWhere(
-      (item) => _hasVisibleRecommendationBadge(item, recommendedItemIds),
+      (item) => _hasVisibleRecommendationCue(item, recommendedItemIds),
     );
     final priceItem = firstWhere(
       (item) =>
@@ -571,113 +680,40 @@ class _OverlayGuideItem {
       if (riskItem != null)
         _OverlayGuideItem(
           title: '알레르기 위험도',
-          message: '위험도 라벨로 내 알레르기와 관련된 위험을 확인하세요.',
+          message: '오버레이 테두리 색으로 알레르기 위험도를 확인하세요.',
           icon: Icons.health_and_safety_rounded,
           color: _allergyColor(riskItem.item.allergyRisk),
-          targetRect: _riskBadgeRect(riskItem, canvasWidth),
+          targetRect: riskItem.rect,
         ),
       if (recommendedItem != null)
         _OverlayGuideItem(
           title: '추천 메뉴',
-          message: '추천 라벨은 비교적 선택하기 좋은 메뉴를 뜻해요.',
+          message: '노란색 외곽 강조는 추천 메뉴를 뜻해요.',
           icon: Icons.star_rounded,
           color: const Color(0xFFFFC107),
-          targetRect: _recommendationBadgeRect(recommendedItem, canvasWidth),
+          targetRect: recommendedItem.rect,
         ),
       if (priceItem != null)
         _OverlayGuideItem(
           title: '가격 환산',
-          message: '가격 라벨을 터치하면 대략적인 환산 금액을 볼 수 있어요.',
+          message: '파란색 테두리의 가격 영역을 터치하면 환산 금액을 볼 수 있어요.',
           icon: Icons.currency_exchange_rounded,
           color: const Color(0xFF42A5F5),
-          targetRect: _priceBadgeRect(priceItem, canvasWidth),
+          targetRect: priceItem.rect,
         ),
     ];
   }
 
-  static bool _isVerticalSplit(_ResolvedOverlayItem item) =>
-      item.splitDirection == 'vertical';
-
-  static bool _hasVisibleRiskBadge(_ResolvedOverlayItem item) {
+  static bool _hasVisibleRiskCue(_ResolvedOverlayItem item) {
     if (!item.item.hasRiskAnalysis) return false;
     return true;
   }
 
-  static bool _hasVisibleRecommendationBadge(
+  static bool _hasVisibleRecommendationCue(
     _ResolvedOverlayItem item,
     Set<String> recommendedItemIds,
   ) {
-    if (!recommendedItemIds.contains(item.item.itemId)) return false;
-    return item.item.hasRiskAnalysis || _isVerticalSplit(item);
-  }
-
-  static Rect _sideBadgeRect(_ResolvedOverlayItem item, double canvasWidth) {
-    const sideBadgeWidth = 24.0;
-    const sideBadgeGap = 4.0;
-    final left = math.max(0.0, item.rect.left - sideBadgeWidth - sideBadgeGap);
-    final right = math.min(canvasWidth, item.rect.right);
-    return Rect.fromLTRB(left, item.rect.top, right, item.rect.bottom);
-  }
-
-  static Rect _topBadgeRect({
-    required _ResolvedOverlayItem item,
-    required double canvasWidth,
-    required double leftOffset,
-    required double width,
-  }) {
-    final left = math.min(
-      canvasWidth,
-      math.max(0.0, item.rect.left + leftOffset),
-    );
-    final right = math.min(canvasWidth, left + width);
-    return Rect.fromLTWH(
-      left,
-      math.max(0.0, item.rect.top - _overlayBadgeHeight),
-      math.max(1.0, right - left),
-      _overlayBadgeHeight,
-    );
-  }
-
-  static Rect _riskBadgeRect(_ResolvedOverlayItem item, double canvasWidth) {
-    if (_isVerticalSplit(item)) {
-      return _sideBadgeRect(item, canvasWidth);
-    }
-
-    return _topBadgeRect(
-      item: item,
-      canvasWidth: canvasWidth,
-      leftOffset: 0,
-      width: 56,
-    );
-  }
-
-  static Rect _recommendationBadgeRect(
-    _ResolvedOverlayItem item,
-    double canvasWidth,
-  ) {
-    if (_isVerticalSplit(item)) {
-      return _sideBadgeRect(item, canvasWidth);
-    }
-
-    return _topBadgeRect(
-      item: item,
-      canvasWidth: canvasWidth,
-      leftOffset: item.item.hasRiskAnalysis ? 56 + _overlayBadgeSpacing : 0,
-      width: 76,
-    );
-  }
-
-  static Rect _priceBadgeRect(_ResolvedOverlayItem item, double canvasWidth) {
-    if (_isVerticalSplit(item)) {
-      return _sideBadgeRect(item, canvasWidth);
-    }
-
-    return _topBadgeRect(
-      item: item,
-      canvasWidth: canvasWidth,
-      leftOffset: 0,
-      width: 52,
-    );
+    return recommendedItemIds.contains(item.item.itemId);
   }
 }
 
@@ -1024,7 +1060,7 @@ class _OverlayGuideLayerState extends State<_OverlayGuideLayer> {
               SizedBox(height: 10 * _scale),
               Expanded(
                 child: Text(
-                  '라벨, 위험도, 추천 메뉴, 가격 환산 기능을 짧게 보여드릴게요.',
+                  '색상 표시, 추천 메뉴, 가격 환산 기능을 짧게 보여드릴게요.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.88),
                     fontSize: 13 * _scale,
@@ -1228,7 +1264,6 @@ class _OverlayBox extends StatelessWidget {
       item.itemType == 'price' &&
       item.convertedPrice != null &&
       item.convertedPrice!.trim().isNotEmpty;
-  bool get _showsPriceBadge => _showsPriceHint;
 
   Color get _overlayColor {
     if (_showsRiskBadge) return _allergyColor(_risk);
@@ -1252,19 +1287,6 @@ class _OverlayBox extends StatelessWidget {
       textScaler: TextScaler.noScaling,
       maxLines: maxLines,
     )..layout(maxWidth: maxWidth);
-  }
-
-  double _measureBadgeWidth(String label, TextDirection textDirection) {
-    final badgePainter = _measureText(
-      label,
-      GoogleFonts.blackHanSans(fontSize: _overlayBadgeFontSize, height: 1.0),
-      textDirection,
-    );
-
-    return _overlayBadgeHorizontalPadding * 2 +
-        _overlayBadgeIconSize +
-        _overlayBadgeIconGap +
-        badgePainter.width;
   }
 
   double _fitFontSize(
@@ -1367,32 +1389,9 @@ class _OverlayBox extends StatelessWidget {
     final displayLabel = _isVerticalSplit ? _verticalText(label) : label;
     final color = _overlayColor;
     const recommendedColor = Color(0xFFFFC107);
-    const badgeRowHeight = _overlayBadgeRowHeight;
-    const sideBadgeWidth = 24.0;
-    const sideBadgeGap = 4.0;
-    final showTopBadges =
-        (_showsRiskBadge || _showsPriceBadge) && !_isVerticalSplit;
-    final showSideBadges =
-        _isVerticalSplit &&
-        (_showsRiskBadge || isRecommended || _showsPriceBadge);
-    final sideBadgeSpace = showSideBadges ? sideBadgeWidth + sideBadgeGap : 0.0;
     final horizontalPadding = originalWidth < 64 ? 4.0 : 6.0;
     final rightTextPadding = horizontalPadding + _overlayTextRightSafetyPadding;
-    final priceIconSpace = _showsPriceHint ? 20.0 : 0.0;
     final verticalPadding = originalHeight < 32 ? 3.0 : 4.0;
-    final badgeWidth = !showTopBadges
-        ? 0.0
-        : (_showsRiskBadge
-                  ? _measureBadgeWidth(_risk.label, textDirection)
-                  : 0.0) +
-              (_showsPriceBadge
-                  ? (_showsRiskBadge ? _overlayBadgeSpacing : 0.0) +
-                        _measureBadgeWidth('가격', textDirection)
-                  : 0.0) +
-              (isRecommended
-                  ? _overlayBadgeSpacing +
-                        _measureBadgeWidth('추천 메뉴', textDirection)
-                  : 0.0);
     final probeTextStyle = GoogleFonts.blackHanSans(
       color: Colors.white,
       fontSize: (originalHeight * 0.72).clamp(12.0, 24.0).toDouble(),
@@ -1405,32 +1404,23 @@ class _OverlayBox extends StatelessWidget {
       maxLines: _isVerticalSplit ? null : 1,
     );
     final desiredWidth = math.max(
-      math.max(
-        originalWidth,
-        singleLinePainter.width +
-            horizontalPadding +
-            rightTextPadding +
-            priceIconSpace +
-            _overlayTextWidthSafetyBuffer,
-      ),
-      badgeWidth,
+      originalWidth,
+      singleLinePainter.width +
+          horizontalPadding +
+          rightTextPadding +
+          _overlayTextWidthSafetyBuffer,
     );
-    final overlayWidth = math.min(
-      desiredWidth,
-      math.max(1.0, canvasWidth - sideBadgeSpace),
-    );
-    final totalOverlayWidth = overlayWidth + sideBadgeSpace;
-    final overlayLeft =
-        (showSideBadges ? originalLeft - sideBadgeSpace : originalLeft)
-            .clamp(0.0, math.max(0.0, canvasWidth - totalOverlayWidth))
-            .toDouble();
+    final overlayWidth = math.min(desiredWidth, math.max(1.0, canvasWidth));
+    final overlayLeft = originalLeft
+        .clamp(0.0, math.max(0.0, canvasWidth - overlayWidth))
+        .toDouble();
     final wrapsToTwoLines = desiredWidth > canvasWidth;
     final effectiveMaxLines = _isVerticalSplit
         ? null
         : (wrapsToTwoLines ? 2 : 1);
     final availableTextWidth = math.max(
       1.0,
-      overlayWidth - horizontalPadding - rightTextPadding - priceIconSpace,
+      overlayWidth - horizontalPadding - rightTextPadding,
     );
     final wrappedPainter = !_isVerticalSplit && wrapsToTwoLines
         ? _measureText(
@@ -1480,271 +1470,65 @@ class _OverlayBox extends StatelessWidget {
 
     return Positioned(
       left: overlayLeft,
-      top: showTopBadges ? top - badgeRowHeight : top,
-      width: totalOverlayWidth,
+      top: top,
+      width: overlayWidth,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: _canTap ? () => _handleTap(context) : null,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (showTopBadges)
-                SizedBox(
-                  height: badgeRowHeight,
-                  child: Align(
-                    alignment: Alignment.bottomLeft,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.bottomLeft,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (_showsRiskBadge)
-                            _InfoBadge(
-                              backgroundColor: color,
-                              foregroundColor: Colors.white,
-                              icon: _allergyIcon(_risk),
-                              label: _risk.label,
-                            ),
-                          if (_showsPriceBadge) ...[
-                            if (_showsRiskBadge)
-                              const SizedBox(width: _overlayBadgeSpacing),
-                            _InfoBadge(
-                              backgroundColor: const Color(0xFF42A5F5),
-                              foregroundColor: Colors.white,
-                              icon: Icons.payments_rounded,
-                              label: '가격',
-                              shadowColor: const Color(
-                                0xFF42A5F5,
-                              ).withValues(alpha: 0.30),
-                            ),
-                          ],
-                          if (isRecommended) ...[
-                            const SizedBox(width: _overlayBadgeSpacing),
-                            _InfoBadge(
-                              backgroundColor: const Color(0xFFFFD54F),
-                              foregroundColor: Colors.black,
-                              icon: Icons.star_rounded,
-                              label: '추천 메뉴',
-                              shadowColor: recommendedColor.withValues(
-                                alpha: 0.35,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (showSideBadges) ...[
-                    _VerticalSideBadges(
-                      height: resolvedOverlayHeight,
-                      riskLabel: _showsRiskBadge ? _risk.label : null,
-                      riskColor: color,
-                      riskIcon: _showsRiskBadge ? _allergyIcon(_risk) : null,
-                      isRecommended: isRecommended,
-                      showPrice: _showsPriceBadge,
-                    ),
-                    const SizedBox(width: sideBadgeGap),
-                  ],
-                  Container(
-                    width: overlayWidth,
-                    height: resolvedOverlayHeight,
-                    padding: EdgeInsets.fromLTRB(
-                      horizontalPadding,
-                      verticalPadding,
-                      rightTextPadding,
-                      verticalPadding,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.80),
-                      borderRadius: BorderRadius.circular(5),
-                      border: Border.all(
-                        color: _showsRiskBadge
-                            ? color
-                            : _showsPriceHint
-                            ? color
-                            : color.withValues(alpha: 0.74),
-                        width: _showsPriceHint ? 2.4 : 2.0,
-                      ),
-                      boxShadow: isRecommended
-                          ? [
-                              BoxShadow(
-                                color: recommendedColor.withValues(alpha: 0.45),
-                                blurRadius: 16,
-                                spreadRadius: 2,
-                              ),
-                            ]
-                          : _showsPriceHint
-                          ? [
-                              BoxShadow(
-                                color: color.withValues(alpha: 0.32),
-                                blurRadius: 12,
-                                spreadRadius: 1,
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              displayLabel,
-                              maxLines: effectiveMaxLines,
-                              softWrap: !_isVerticalSplit && wrapsToTwoLines,
-                              overflow: TextOverflow.visible,
-                              textScaler: TextScaler.noScaling,
-                              textAlign: _isVerticalSplit
-                                  ? TextAlign.center
-                                  : TextAlign.start,
-                              style: textStyle,
-                            ),
-                          ),
-                          if (_showsPriceHint) ...[
-                            const SizedBox(width: 4),
-                            Container(
-                              width: 17,
-                              height: 17,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.18),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.currency_exchange_rounded,
-                                color: Colors.white,
-                                size: 12,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+          child: Container(
+            width: overlayWidth,
+            height: resolvedOverlayHeight,
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              verticalPadding,
+              rightTextPadding,
+              verticalPadding,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.80),
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(
+                color: _showsRiskBadge
+                    ? color
+                    : _showsPriceHint
+                    ? color
+                    : color.withValues(alpha: 0.74),
+                width: _showsPriceHint ? 2.4 : 2.0,
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _VerticalSideBadges extends StatelessWidget {
-  const _VerticalSideBadges({
-    required this.height,
-    required this.riskLabel,
-    required this.riskColor,
-    required this.riskIcon,
-    required this.isRecommended,
-    required this.showPrice,
-  });
-
-  final double height;
-  final String? riskLabel;
-  final Color riskColor;
-  final IconData? riskIcon;
-  final bool isRecommended;
-  final bool showPrice;
-
-  @override
-  Widget build(BuildContext context) {
-    final badges = <Widget>[
-      if (riskLabel != null && riskIcon != null)
-        _VerticalInfoBadge(
-          backgroundColor: riskColor,
-          foregroundColor: Colors.white,
-          icon: riskIcon!,
-          label: riskLabel!,
-        ),
-      if (isRecommended)
-        const _VerticalInfoBadge(
-          backgroundColor: Color(0xFFFFD54F),
-          foregroundColor: Colors.black,
-          icon: Icons.star_rounded,
-          label: '추천 메뉴',
-        ),
-      if (showPrice)
-        const _VerticalInfoBadge(
-          backgroundColor: Color(0xFF42A5F5),
-          foregroundColor: Colors.white,
-          icon: Icons.payments_rounded,
-          label: '가격',
-        ),
-    ];
-
-    return SizedBox(
-      width: 24,
-      height: height,
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.topCenter,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < badges.length; i++) ...[
-              if (i > 0) const SizedBox(height: 3),
-              badges[i],
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _VerticalInfoBadge extends StatelessWidget {
-  const _VerticalInfoBadge({
-    required this.backgroundColor,
-    required this.foregroundColor,
-    required this.icon,
-    required this.label,
-  });
-
-  final Color backgroundColor;
-  final Color foregroundColor;
-  final IconData icon;
-  final String label;
-
-  String get _verticalLabel => label.runes
-      .map((rune) => String.fromCharCode(rune))
-      .where((char) => char.trim().isNotEmpty)
-      .join('\n');
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: foregroundColor, size: 10),
-            const SizedBox(height: 3),
-            Text(
-              _verticalLabel,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: foregroundColor,
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                height: 1.0,
+              boxShadow: isRecommended
+                  ? [
+                      BoxShadow(
+                        color: recommendedColor.withValues(alpha: 0.45),
+                        blurRadius: 16,
+                        spreadRadius: 2,
+                      ),
+                    ]
+                  : _showsPriceHint
+                  ? [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.32),
+                        blurRadius: 12,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                displayLabel,
+                maxLines: effectiveMaxLines,
+                softWrap: !_isVerticalSplit && wrapsToTwoLines,
+                overflow: TextOverflow.visible,
+                textScaler: TextScaler.noScaling,
+                textAlign: _isVerticalSplit
+                    ? TextAlign.center
+                    : TextAlign.start,
+                style: textStyle,
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -2388,14 +2172,12 @@ class _InfoBadge extends StatelessWidget {
     required this.foregroundColor,
     required this.icon,
     required this.label,
-    this.shadowColor,
   });
 
   final Color backgroundColor;
   final Color foregroundColor;
   final IconData icon;
   final String label;
-  final Color? shadowColor;
 
   @override
   Widget build(BuildContext context) {
@@ -2403,9 +2185,6 @@ class _InfoBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(999),
-        boxShadow: shadowColor == null
-            ? null
-            : [BoxShadow(color: shadowColor!, blurRadius: 10, spreadRadius: 1)],
       ),
       child: SizedBox(
         height: _overlayBadgeHeight,
@@ -2759,272 +2538,283 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
   Widget build(BuildContext context) {
     final color = _allergyColor(_item.allergyRisk);
     final icon = _allergyIcon(_item.allergyRisk);
+    final sheetHeight =
+        MediaQuery.sizeOf(context).height * _menuDetailSheetHeightRatio;
 
     return SafeArea(
       top: false,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1C1C1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: FutureBuilder<MenuDetail>(
-          future: _detailFuture,
-          builder: (context, snapshot) {
-            final detail = snapshot.data;
-            final error = snapshot.error;
-            final isLoading = snapshot.connectionState != ConnectionState.done;
-            final recommendation = _recommendation;
-            final errorMessage = error is MenuDetailException
-                ? error.message
-                : error != null
-                ? '메뉴 상세 정보를 불러오지 못했습니다.'
-                : null;
+      child: SizedBox(
+        height: sheetHeight,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: FutureBuilder<MenuDetail>(
+            future: _detailFuture,
+            builder: (context, snapshot) {
+              final detail = snapshot.data;
+              final error = snapshot.error;
+              final isLoading =
+                  snapshot.connectionState != ConnectionState.done;
+              final recommendation = _recommendation;
+              final errorMessage = error is MenuDetailException
+                  ? error.message
+                  : error != null
+                  ? '메뉴 상세 정보를 불러오지 못했습니다.'
+                  : null;
 
-            return SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                24,
-                12,
-                24,
-                24 + MediaQuery.of(context).padding.bottom,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(2),
+              return SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  12,
+                  24,
+                  24 + MediaQuery.of(context).padding.bottom,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildImageSection(detail),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _InfoBadge(
-                        backgroundColor: color.withValues(alpha: 0.18),
-                        foregroundColor: color,
-                        icon: icon,
-                        label: _item.allergyRisk.label,
-                      ),
-                      if (recommendation != null)
-                        _InfoBadge(
-                          backgroundColor: const Color(
-                            0xFFFFC107,
-                          ).withValues(alpha: 0.16),
-                          foregroundColor: const Color(0xFFFFD54F),
-                          icon: Icons.star_rounded,
-                          label: '추천 메뉴',
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  if (recommendation != null) ...[
-                    _buildRecommendationSection(recommendation),
                     const SizedBox(height: 16),
-                  ],
-                  Text(
-                    _titleText(detail),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      height: 1.3,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _item.originalText,
-                    style: const TextStyle(color: Colors.white38, fontSize: 14),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () => _showOrderAssistant(detail),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFF06292),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 13,
+                    _buildImageSection(detail),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _InfoBadge(
+                          backgroundColor: color.withValues(alpha: 0.18),
+                          foregroundColor: color,
+                          icon: icon,
+                          label: _item.allergyRisk.label,
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                        if (recommendation != null)
+                          _InfoBadge(
+                            backgroundColor: const Color(
+                              0xFFFFC107,
+                            ).withValues(alpha: 0.16),
+                            foregroundColor: const Color(0xFFFFD54F),
+                            icon: Icons.star_rounded,
+                            label: '추천 메뉴',
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (recommendation != null) ...[
+                      _buildRecommendationSection(recommendation),
+                      const SizedBox(height: 16),
+                    ],
+                    Text(
+                      _titleText(detail),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _item.originalText,
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () => _showOrderAssistant(detail),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFF06292),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 13,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.record_voice_over_rounded),
+                        label: const Text(
+                          '주문 도우미',
+                          style: TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
-                      icon: const Icon(Icons.record_voice_over_rounded),
-                      label: const Text(
-                        '주문 도우미',
-                        style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2C2C2E),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2C2C2E),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: isLoading
-                        ? const Row(
-                            children: [
-                              SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Color(0xFFFFB74D),
+                      child: isLoading
+                          ? const Row(
+                              children: [
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Color(0xFFFFB74D),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  '메뉴 상세 정보를 불러오는 중입니다.',
-                                  style: TextStyle(
-                                    color: Colors.white70,
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    '메뉴 상세 정보를 불러오는 중입니다.',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : errorMessage != null
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(
+                                      Icons.error_outline_rounded,
+                                      color: Color(0xFFFF8A80),
+                                      size: 16,
+                                    ),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      '상세 정보를 불러오지 못했습니다.',
+                                      style: TextStyle(
+                                        color: Color(0xFFFF8A80),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  errorMessage,
+                                  style: const TextStyle(
+                                    color: Colors.white60,
                                     fontSize: 13,
+                                    height: 1.5,
                                   ),
                                 ),
-                              ),
-                            ],
-                          )
-                        : errorMessage != null
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Row(
-                                children: [
-                                  Icon(
-                                    Icons.error_outline_rounded,
-                                    color: Color(0xFFFF8A80),
+                                const SizedBox(height: 12),
+                                OutlinedButton.icon(
+                                  onPressed: _retry,
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: const BorderSide(
+                                      color: Colors.white24,
+                                    ),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.refresh_rounded,
                                     size: 16,
                                   ),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    '상세 정보를 불러오지 못했습니다.',
-                                    style: TextStyle(
-                                      color: Color(0xFFFF8A80),
-                                      fontSize: 13,
+                                  label: const Text('다시 시도'),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                const Icon(
+                                  Icons.local_fire_department_rounded,
+                                  color: Color(0xFFFFB74D),
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    detail?.calorieLabel ?? '칼로리 정보 없음',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                errorMessage,
-                                style: const TextStyle(
-                                  color: Colors.white60,
-                                  fontSize: 13,
-                                  height: 1.5,
                                 ),
-                              ),
-                              const SizedBox(height: 12),
-                              OutlinedButton.icon(
-                                onPressed: _retry,
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.white,
-                                  side: const BorderSide(color: Colors.white24),
+                              ],
+                            ),
+                    ),
+                    if (_item.detectedAllergens.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      const Text(
+                        '포함 알레르겐',
+                        style: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _item.detectedAllergens
+                            .map(
+                              (allergen) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
                                 ),
-                                icon: const Icon(
-                                  Icons.refresh_rounded,
-                                  size: 16,
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: color.withValues(alpha: 0.40),
+                                  ),
                                 ),
-                                label: const Text('다시 시도'),
-                              ),
-                            ],
-                          )
-                        : Row(
-                            children: [
-                              const Icon(
-                                Icons.local_fire_department_rounded,
-                                color: Color(0xFFFFB74D),
-                                size: 18,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
                                 child: Text(
-                                  detail?.calorieLabel ?? '칼로리 정보 없음',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
+                                  allergen,
+                                  style: TextStyle(
+                                    color: color,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                  ),
-                  if (_item.detectedAllergens.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    const Text(
-                      '포함 알레르겐',
-                      style: TextStyle(
-                        color: Colors.white38,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.0,
+                            )
+                            .toList(),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _item.detectedAllergens
-                          .map(
-                            (allergen) => Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: color.withValues(alpha: 0.40),
-                                ),
-                              ),
-                              child: Text(
-                                allergen,
-                                style: TextStyle(
-                                  color: color,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
+                    ],
+                    if (detail != null &&
+                        detail.description != null &&
+                        detail.description!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      _buildDetailTextSection(
+                        title: '메뉴 설명',
+                        body: detail.description!,
+                      ),
+                    ],
+                    if (detail != null && detail.ingredients.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      _buildIngredientChips(detail.ingredients),
+                    ],
                   ],
-                  if (detail != null &&
-                      detail.description != null &&
-                      detail.description!.trim().isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    _buildDetailTextSection(
-                      title: '메뉴 설명',
-                      body: detail.description!,
-                    ),
-                  ],
-                  if (detail != null && detail.ingredients.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    _buildIngredientChips(detail.ingredients),
-                  ],
-                ],
-              ),
-            );
-          },
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -3040,138 +2830,143 @@ class LegacyMenuDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _allergyColor(item.allergyRisk);
     final icon = _allergyIcon(item.allergyRisk);
+    final sheetHeight =
+        MediaQuery.sizeOf(context).height * _menuDetailSheetHeightRatio;
 
     return SafeArea(
       top: false,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1C1C1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            24,
-            12,
-            24,
-            24 + MediaQuery.of(context).padding.bottom,
+      child: SizedBox(
+        height: sheetHeight,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF1C1C1E),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              24,
+              12,
+              24,
+              24 + MediaQuery.of(context).padding.bottom,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                height: 160,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2C2C2E),
-                  borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  height: 160,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2C2C2E),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.restaurant_menu_rounded,
+                        color: Colors.white24,
+                        size: 36,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        '메뉴 이미지',
+                        style: TextStyle(color: Colors.white24, fontSize: 12),
+                      ),
+                    ],
+                  ),
                 ),
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+                const SizedBox(height: 16),
+                _InfoBadge(
+                  backgroundColor: color.withValues(alpha: 0.18),
+                  foregroundColor: color,
+                  icon: icon,
+                  label: item.allergyRisk.label,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  item.translatedText,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.originalText,
+                  style: const TextStyle(color: Colors.white38, fontSize: 14),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: const [
                     Icon(
-                      Icons.restaurant_menu_rounded,
+                      Icons.local_fire_department_rounded,
                       color: Colors.white24,
-                      size: 36,
+                      size: 14,
                     ),
-                    SizedBox(height: 8),
+                    SizedBox(width: 5),
                     Text(
-                      '메뉴 이미지',
-                      style: TextStyle(color: Colors.white24, fontSize: 12),
+                      '칼로리 정보 준비 중',
+                      style: TextStyle(color: Colors.white24, fontSize: 13),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              _InfoBadge(
-                backgroundColor: color.withValues(alpha: 0.18),
-                foregroundColor: color,
-                icon: icon,
-                label: item.allergyRisk.label,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                item.translatedText,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                item.originalText,
-                style: const TextStyle(color: Colors.white38, fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: const [
-                  Icon(
-                    Icons.local_fire_department_rounded,
-                    color: Colors.white24,
-                    size: 14,
+                if (item.detectedAllergens.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  const Text(
+                    '포함 알레르겐',
+                    style: TextStyle(
+                      color: Colors.white38,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.0,
+                    ),
                   ),
-                  SizedBox(width: 5),
-                  Text(
-                    '칼로리 정보 준비 중',
-                    style: TextStyle(color: Colors.white24, fontSize: 13),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: item.detectedAllergens
+                        .map(
+                          (allergen) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: color.withValues(alpha: 0.40),
+                              ),
+                            ),
+                            child: Text(
+                              allergen,
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
                 ],
-              ),
-              if (item.detectedAllergens.isNotEmpty) ...[
-                const SizedBox(height: 24),
-                const Text(
-                  '포함 알레르겐',
-                  style: TextStyle(
-                    color: Colors.white38,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: item.detectedAllergens
-                      .map(
-                        (allergen) => Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: color.withValues(alpha: 0.40),
-                            ),
-                          ),
-                          child: Text(
-                            allergen,
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
               ],
-            ],
+            ),
           ),
         ),
       ),
