@@ -60,6 +60,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _editNickname() async {
+    final controller = TextEditingController(text: _nickname);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('닉네임 변경'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '새 닉네임 입력'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text(
+              '저장',
+              style: TextStyle(color: Color(0xFFF06292)),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (result == null || result.isEmpty || result == _nickname) return;
+    setState(() => _nickname = result);
+    await UserPrefs.saveNickname(result);
+    final isLoggedIn = await _authService.isLoggedIn();
+    if (isLoggedIn) {
+      await _authService.updateProfile(nickname: result, allergies: _allergies);
+    }
+  }
+
   Future<void> _onAvatarSelected(String url) async {
     if (_isSaving) return;
     setState(() {
@@ -106,12 +141,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             _buildCurrentAvatar(),
             const SizedBox(height: 12),
-            Text(
-              _nickname.isEmpty ? '닉네임 없음' : _nickname,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF2D2D2D),
+            GestureDetector(
+              onTap: _editNickname,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _nickname.isEmpty ? '닉네임 없음' : _nickname,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2D2D2D),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.edit, size: 16, color: Colors.grey),
+                ],
               ),
             ),
             const SizedBox(height: 32),

@@ -365,22 +365,30 @@ class _AuthScreenState extends State<AuthScreen>
               height: 50,
               child: OutlinedButton.icon(
                 onPressed: _isLoading ? null : _onGoogleSignIn,
-                icon: const Text(
-                  "G",
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF4285F4),
-                  ),
-                ),
-                label: const Text(
-                  "Google로 계속하기",
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF2D2D2D),
-                  ),
-                ),
+                icon: _isLoading
+                    ? const SizedBox.shrink()
+                    : const Text(
+                        "G",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF4285F4),
+                        ),
+                      ),
+                label: _isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : const Text(
+                        "Google로 계속하기",
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF2D2D2D),
+                        ),
+                      ),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Color(0xFFE0E0E0)),
                   shape: RoundedRectangleBorder(

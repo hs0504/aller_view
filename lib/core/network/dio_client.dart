@@ -6,12 +6,15 @@ class DioClient {
   late final Dio publicDio;
 
   static const _storage = FlutterSecureStorage();
-  final String _baseUrl = 'https://allerview-729003075709.asia-northeast3.run.app';
-  // final String _baseUrl = 'http://10.184.144.46:8080';
+  final String _baseUrl =
+      'https://allerview-729003075709.asia-northeast3.run.app';
 
   /// 토큰이 완전히 만료되어 재로그인이 필요할 때 호출되는 콜백
-  /// main.dart 또는 최상위 위젯에서 네비게이터 이동 로직을 등록해두면 됨
   static void Function()? onSessionExpired;
+
+  bool _isRefreshing = false;
+  final List<({RequestOptions opts, ErrorInterceptorHandler handler})>
+      _retryQueue = [];
 
   DioClient() {
     publicDio = Dio(
@@ -23,7 +26,6 @@ class DioClient {
       ),
     );
 
-    // Auth Interceptor: 저장된 토큰 헤더 첨부 + 401 시 토큰 갱신 후 재시도
     publicDio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -34,42 +36,40 @@ class DioClient {
           handler.next(options);
         },
         onError: (DioException error, ErrorInterceptorHandler handler) async {
-          if (error.response?.statusCode == 401) {
-            final refreshToken = await _storage.read(key: 'refresh_token');
-            if (refreshToken != null && refreshToken.isNotEmpty) {
-              try {
-                final refreshDio = Dio(BaseOptions(baseUrl: _baseUrl));
-                final refreshResponse = await refreshDio.post(
-                  '/auth/refresh',
-                  data: {'refresh_token': refreshToken},
-                );
-                if (refreshResponse.statusCode == 200 ||
-                    refreshResponse.statusCode == 201) {
-                  final newAccess =
-                      refreshResponse.data['access_token'] as String;
-                  final newRefresh =
-                      refreshResponse.data['refresh_token'] as String;
-                  await _storage.write(key: 'access_token', value: newAccess);
-                  await _storage.write(
-                      key: 'refresh_token', value: newRefresh);
-
-                  // 원래 요청 재시도
-                  final opts = error.requestOptions;
-                  opts.headers['Authorization'] = 'Bearer $newAccess';
-                  final retryResponse = await publicDio.fetch(opts);
-                  handler.resolve(retryResponse);
-                  return;
-                }
-              } catch (e) {
-                if (kDebugMode) print('Token refresh error: $e');
-              }
-            }
-            // refresh 실패 → 토큰 삭제 후 세션 만료 알림
-            await _storage.delete(key: 'access_token');
-            await _storage.delete(key: 'refresh_token');
-            onSessionExpired?.call();
+          if (error.response?.statusCode != 401) {
+            handler.next(error);
+            return;
           }
-          handler.next(error);
+
+          // 이미 리프레시 진행 중이면 큐에 적재 후 대기
+          if (_isRefreshing) {
+            _retryQueue
+                .add((opts: error.requestOptions, handler: handler));
+            return;
+          }
+
+          _isRefreshing = true;
+          try {
+            final newToken = await _tryRefresh();
+            if (newToken != null) {
+              await _replayQueue(newToken);
+              final opts = error.requestOptions;
+              opts.headers['Authorization'] = 'Bearer $newToken';
+              handler.resolve(await publicDio.fetch(opts));
+            } else {
+              await _storage.delete(key: 'access_token');
+              await _storage.delete(key: 'refresh_token');
+              onSessionExpired?.call();
+              _failQueue(error);
+              handler.next(error);
+            }
+          } catch (e) {
+            _failQueue(error);
+            handler.next(error);
+          } finally {
+            _isRefreshing = false;
+            _retryQueue.clear();
+          }
         },
       ),
     );
@@ -86,15 +86,58 @@ class DioClient {
     }
   }
 
+  /// refresh_token으로 새 access_token 발급. 실패 시 null 반환.
+  Future<String?> _tryRefresh() async {
+    final refreshToken = await _storage.read(key: 'refresh_token');
+    if (refreshToken == null || refreshToken.isEmpty) return null;
+    try {
+      final refreshDio = Dio(BaseOptions(baseUrl: _baseUrl));
+      final res = await refreshDio.post(
+        '/auth/refresh',
+        data: {'refresh_token': refreshToken},
+      );
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final newAccess = res.data['access_token'] as String;
+        final newRefresh = res.data['refresh_token'] as String;
+        await _storage.write(key: 'access_token', value: newAccess);
+        await _storage.write(key: 'refresh_token', value: newRefresh);
+        return newAccess;
+      }
+    } catch (e) {
+      if (kDebugMode) print('Token refresh error: $e');
+    }
+    return null;
+  }
+
+  /// 대기 중인 요청들을 새 토큰으로 재시도
+  Future<void> _replayQueue(String newToken) async {
+    final queue = List.of(_retryQueue);
+    for (final item in queue) {
+      item.opts.headers['Authorization'] = 'Bearer $newToken';
+      try {
+        final response = await publicDio.fetch(item.opts);
+        item.handler.resolve(response);
+      } on DioException catch (e) {
+        item.handler.next(e);
+      }
+    }
+  }
+
+  /// 리프레시 실패 시 대기 중인 요청들 모두 에러 처리
+  void _failQueue(DioException error) {
+    for (final item in _retryQueue) {
+      item.handler.next(error);
+    }
+  }
+
   Future<Response?> get(
-      String path, {
-        Map<String, dynamic>? queryParams,
-      }) async {
+    String path, {
+    Map<String, dynamic>? queryParams,
+  }) async {
     try {
       final response = await publicDio.get(path, queryParameters: queryParams);
       return response;
     } on DioException catch (e) {
-      // 4xx/5xx는 response를 그대로 반환 → 호출부에서 statusCode 분기 가능
       if (e.type == DioExceptionType.badResponse && e.response != null) {
         return e.response;
       }
@@ -104,16 +147,16 @@ class DioClient {
   }
 
   Future<Response?> post(
-      String path, {
-        Map<String, dynamic>? data,
-        String? token, // 일회성 Bearer 토큰 (Google OAuth 등)
-      }) async {
+    String path, {
+    Map<String, dynamic>? data,
+    String? token,
+  }) async {
     try {
       final options = token != null
           ? Options(headers: {'Authorization': 'Bearer $token'})
           : null;
       final response =
-      await publicDio.post(path, data: data, options: options);
+          await publicDio.post(path, data: data, options: options);
       return response;
     } on DioException catch (e) {
       if (e.type == DioExceptionType.badResponse && e.response != null) {
@@ -125,9 +168,9 @@ class DioClient {
   }
 
   Future<Response?> put(
-      String path, {
-        Map<String, dynamic>? data,
-      }) async {
+    String path, {
+    Map<String, dynamic>? data,
+  }) async {
     try {
       final response = await publicDio.put(path, data: data);
       return response;

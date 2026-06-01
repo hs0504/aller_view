@@ -172,6 +172,7 @@ class AuthService {
   Future<void> updateProfile({
     required List<String> allergies,
     String? avatarUrl,
+    String? nickname,
   }) async {
     try {
       await _dioClient.put(
@@ -179,6 +180,7 @@ class AuthService {
         data: {
           'allergies': allergies,
           if (avatarUrl != null) 'avatar_url': avatarUrl,
+          if (nickname != null) 'nickname': nickname,
         },
       );
     } catch (e) {
