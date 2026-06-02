@@ -88,6 +88,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         context,
         MaterialPageRoute(builder: (_) => const MenuCameraScreen()),
       );
+      await _loadLanguageSettings();
       return;
     }
 

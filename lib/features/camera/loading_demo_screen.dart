@@ -120,7 +120,7 @@ class _LoadingDemoScreenState extends State<LoadingDemoScreen>
     return Scaffold(
       backgroundColor: switch (_theme) {
         _LoadingDemoTheme.light => const Color(0xFFFFF5F7),
-        _LoadingDemoTheme.soft => const Color(0xFF2B2428),
+        _LoadingDemoTheme.soft => const Color(0xFF34363C),
         _LoadingDemoTheme.dark => const Color(0xFF101010),
       },
       body: Stack(
@@ -134,7 +134,7 @@ class _LoadingDemoScreenState extends State<LoadingDemoScreen>
                 color: isLight
                     ? Colors.white.withValues(alpha: 0.76)
                     : isSoft
-                    ? const Color(0xFF1F1A1D).withValues(alpha: 0.58)
+                    ? const Color(0xFF25272D).withValues(alpha: 0.52)
                     : Colors.black.withValues(alpha: 0.70),
               ),
             ),
@@ -152,9 +152,9 @@ class _LoadingDemoScreenState extends State<LoadingDemoScreen>
                       Color(0xF2FFFFFF),
                     ],
                     _LoadingDemoTheme.soft => const [
-                      Color(0xE6423238),
-                      Color(0xEE2A2025),
-                      Color(0xF51A1719),
+                      Color(0xE84A4D55),
+                      Color(0xEF34363C),
+                      Color(0xF426282E),
                     ],
                     _LoadingDemoTheme.dark => const [
                       Color(0xCC121212),
@@ -381,14 +381,14 @@ class _AnalysisLoadingPreview extends StatelessWidget {
                 color: isLight
                     ? Colors.white.withValues(alpha: 0.94)
                     : isSoft
-                    ? const Color(0xFF2D252A).withValues(alpha: 0.82)
+                    ? const Color(0xFF3A3D45).withValues(alpha: 0.84)
                     : Colors.white.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
                   color: isLight
                       ? const Color(0xFFFCE4EC)
                       : isSoft
-                      ? const Color(0xFFFFB8CC).withValues(alpha: 0.20)
+                      ? Colors.white.withValues(alpha: 0.18)
                       : Colors.white12,
                 ),
                 boxShadow: [
@@ -555,7 +555,7 @@ class _FlowingProgressBar extends StatelessWidget {
             color: isLight
                 ? const Color(0xFFFFE4EC).withValues(alpha: 0.68)
                 : isSoft
-                ? const Color(0xFFFFE4EC).withValues(alpha: 0.16)
+                ? Colors.white.withValues(alpha: 0.16)
                 : Colors.white.withValues(alpha: 0.12),
           ),
           child: LayoutBuilder(
@@ -645,6 +645,7 @@ class _LoadingStepTile extends StatelessWidget {
     final isActive = state == _LoadingStepState.active;
     final isLight = theme == _LoadingDemoTheme.light;
     final isSoft = theme == _LoadingDemoTheme.soft;
+    final showDescription = !isSoft;
     final color = isCompleted
         ? (isLight ? const Color(0xFF43A047) : const Color(0xFF81C784))
         : isActive
@@ -660,7 +661,7 @@ class _LoadingStepTile extends StatelessWidget {
             : isLight
             ? const Color(0xFFFFF8FA)
             : isSoft
-            ? const Color(0xFFFFE4EC).withValues(alpha: 0.07)
+            ? Colors.white.withValues(alpha: 0.07)
             : Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(15),
         border: Border.all(
@@ -669,14 +670,16 @@ class _LoadingStepTile extends StatelessWidget {
               : isLight
               ? const Color(0xFFFCE4EC)
               : isSoft
-              ? const Color(0xFFFFB8CC).withValues(alpha: 0.18)
+              ? Colors.white.withValues(alpha: 0.14)
               : Colors.white10,
         ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(10),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: showDescription
+              ? CrossAxisAlignment.start
+              : CrossAxisAlignment.center,
           children: [
             Container(
               width: 34,
@@ -708,9 +711,14 @@ class _LoadingStepTile extends StatelessWidget {
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: showDescription
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
                 children: [
                   Text(
                     step.title,
+                    maxLines: isSoft ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: isActive || isCompleted
                           ? (isLight ? const Color(0xFF222222) : Colors.white)
@@ -722,15 +730,19 @@ class _LoadingStepTile extends StatelessWidget {
                       height: 1.25,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    step.description,
-                    style: TextStyle(
-                      color: isLight ? const Color(0xFF777777) : Colors.white60,
-                      fontSize: 11.1,
-                      height: 1.36,
+                  if (showDescription) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      step.description,
+                      style: TextStyle(
+                        color: isLight
+                            ? const Color(0xFF777777)
+                            : Colors.white60,
+                        fontSize: 11.1,
+                        height: 1.36,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -384,7 +385,14 @@ class _OverlayImageView extends StatelessWidget {
                 rect.width * ratio,
                 rect.height,
               );
-        resolved.add(pending.resolve(splitRect, splitDirection: direction));
+        // Split groups use direction to divide the source box area. In vertical
+        // split cases, menu labels still need to render horizontally.
+        resolved.add(
+          pending.resolve(
+            splitRect,
+            splitDirection: direction == 'vertical' ? null : direction,
+          ),
+        );
         offset += ratio;
       }
     }
@@ -3195,6 +3203,16 @@ class _ApiDebugSheet extends StatelessWidget {
       ? '(empty)'
       : ocrLines.indexed.map((e) => '${e.$1 + 1}. ${e.$2}').join('\n');
 
+  String get _prettyResponseJson {
+    try {
+      return const JsonEncoder.withIndent(
+        '  ',
+      ).convert(jsonDecode(response.rawResponseBody));
+    } catch (_) {
+      return response.rawResponseBody;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
@@ -3280,9 +3298,9 @@ class _ApiDebugSheet extends StatelessWidget {
             const SizedBox(height: 16),
             _DebugSection(
               title: '응답 JSON',
-              copyText: response.rawResponseBody,
+              copyText: _prettyResponseJson,
               child: SelectableText(
-                response.rawResponseBody,
+                _prettyResponseJson,
                 style: const TextStyle(
                   color: Color(0xFFB5CEA8),
                   fontSize: 12,

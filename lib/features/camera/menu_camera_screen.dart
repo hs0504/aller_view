@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/data/language_data.dart';
+import '../../core/storage/user_prefs.dart';
 import 'menu_photo_preview_screen.dart';
 
 class MenuCameraScreen extends StatefulWidget {
@@ -20,6 +22,7 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
   bool _isInitializing = true;
   bool _isTakingPicture = false;
   bool _isPressingShutter = false;
+  String _departureLanguage = 'ja';
   String? _errorMessage;
 
   late final AnimationController _scanAnim;
@@ -31,6 +34,7 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+    _loadLanguageSettings();
     _initializeCamera();
   }
 
@@ -91,6 +95,36 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
     }
   }
 
+  Future<void> _loadLanguageSettings() async {
+    final settings = await UserPrefs.loadLanguageSettings();
+    if (!mounted) return;
+    setState(() {
+      _departureLanguage = settings.departure;
+    });
+  }
+
+  Future<void> _saveDepartureLanguage(String code) async {
+    await UserPrefs.saveLanguageSettings(departureLanguage: code);
+    if (!mounted) return;
+    setState(() {
+      _departureLanguage = code;
+    });
+  }
+
+  Future<void> _showLanguagePicker() async {
+    if (_isTakingPicture) return;
+
+    final selectedCode = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _CameraLanguageSheet(selectedCode: _departureLanguage),
+    );
+
+    if (!mounted || selectedCode == null) return;
+    await _saveDepartureLanguage(selectedCode);
+  }
+
   Future<void> _takePicture() async {
     final controller = _controller;
     if (controller == null ||
@@ -149,13 +183,11 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
     final topPad = padding.top;
     final bottomPad = padding.bottom;
     const horizontalInset = 18.0;
-    const dockHeight = 168.0;
+    const dockHeight = 158.0;
     final frameTop = topPad + 82;
     final frameBottom = bottomPad + dockHeight;
-    final frameHeight = math.max(
-      260.0,
-      mediaSize.height - frameTop - frameBottom,
-    );
+    final availableFrameHeight = mediaSize.height - frameTop - frameBottom;
+    final frameHeight = math.max(0.0, availableFrameHeight);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -178,7 +210,11 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
               left: 16,
               right: 16,
               top: topPad + 8,
-              child: _CameraTopBar(onClose: () => Navigator.pop(context)),
+              child: _CameraTopBar(
+                departureCode: _departureLanguage,
+                onClose: () => Navigator.pop(context),
+                onLanguageTap: _showLanguagePicker,
+              ),
             ),
             Positioned(
               left: horizontalInset,
@@ -244,43 +280,127 @@ class _CameraAtmosphere extends StatelessWidget {
 }
 
 class _CameraTopBar extends StatelessWidget {
-  const _CameraTopBar({required this.onClose});
+  const _CameraTopBar({
+    required this.departureCode,
+    required this.onClose,
+    required this.onLanguageTap,
+  });
 
+  final String departureCode;
   final VoidCallback onClose;
+  final VoidCallback onLanguageTap;
+
+  LanguageOption _findOption(String code) {
+    return departureLanguageOptions.firstWhere(
+      (option) => option.code == code,
+      orElse: () => departureLanguageOptions.first,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _GlassIconButton(icon: Icons.close_rounded, onPressed: onClose),
-        Expanded(
-          child: Center(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: Colors.white24),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 10,
+    final departure = _findOption(departureCode);
+
+    return SizedBox(
+      height: 44,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _GlassIconButton(
+              icon: Icons.close_rounded,
+              onPressed: onClose,
+            ),
+          ),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 132),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white24),
                 ),
-                child: Text(
-                  '\uba54\ub274\ud310 \ucd2c\uc601',
-                  style: GoogleFonts.poppins(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
+                  child: Text(
+                    '\uba54\ub274\ud310 \ucd2c\uc601',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _TopLanguageChip(departure: departure, onTap: onLanguageTap),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopLanguageChip extends StatelessWidget {
+  const _TopLanguageChip({required this.departure, required this.onTap});
+
+  final LanguageOption departure;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 122),
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(departure.flag, style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    departure.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Icon(
+                  Icons.expand_more_rounded,
+                  color: Colors.white.withValues(alpha: 0.82),
+                  size: 16,
+                ),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(width: 44),
-      ],
+      ),
     );
   }
 }
@@ -563,73 +683,238 @@ class _CaptureDock extends StatelessWidget {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '\uae00\uc790\uac00 \uc120\uba85\ud558\uac8c \ubcf4\uc77c \ub54c \uc7a0\uc2dc \uba48\ucd98 \ub4a4 \ucd2c\uc601\ud574\uc8fc\uc138\uc694.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.78),
-                fontSize: 13,
-                height: 1.35,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: GestureDetector(
+          onTapDown: onTapDown,
+          onTapCancel: onTapCancel,
+          onTapUp: onTapUp,
+          onTap: onTap,
+          child: AnimatedScale(
+            scale: isTakingPicture
+                ? 0.9
+                : isPressingShutter
+                ? 0.95
+                : 1.0,
+            duration: const Duration(milliseconds: 140),
+            child: Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.12),
+                border: Border.all(color: Colors.white30, width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(
+                      0xFFF06292,
+                    ).withValues(alpha: isPressingShutter ? 0.46 : 0.28),
+                    blurRadius: isPressingShutter ? 28 : 20,
+                    spreadRadius: isPressingShutter ? 5 : 2,
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTapDown: onTapDown,
-              onTapCancel: onTapCancel,
-              onTapUp: onTapUp,
-              onTap: onTap,
-              child: AnimatedScale(
-                scale: isTakingPicture
-                    ? 0.9
-                    : isPressingShutter
-                    ? 0.95
-                    : 1.0,
-                duration: const Duration(milliseconds: 140),
-                child: Container(
-                  width: 90,
-                  height: 90,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.12),
-                    border: Border.all(color: Colors.white30, width: 1.2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(
-                          0xFFF06292,
-                        ).withValues(alpha: isPressingShutter ? 0.46 : 0.28),
-                        blurRadius: isPressingShutter ? 28 : 20,
-                        spreadRadius: isPressingShutter ? 5 : 2,
-                      ),
+              padding: const EdgeInsets.all(8),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      isTakingPicture ? Colors.white70 : Colors.white,
+                      isTakingPicture
+                          ? Colors.white54
+                          : const Color(0xFFFFF4F7),
                     ],
                   ),
-                  padding: const EdgeInsets.all(8),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          isTakingPicture ? Colors.white70 : Colors.white,
-                          isTakingPicture
-                              ? Colors.white54
-                              : const Color(0xFFFFF4F7),
-                        ],
-                      ),
-                      border: Border.all(
-                        color: const Color(0xFFF06292).withValues(alpha: 0.26),
-                        width: 3,
-                      ),
-                    ),
+                  border: Border.all(
+                    color: const Color(0xFFF06292).withValues(alpha: 0.26),
+                    width: 3,
                   ),
                 ),
               ),
             ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CameraLanguageSheet extends StatelessWidget {
+  const _CameraLanguageSheet({required this.selectedCode});
+
+  final String selectedCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 12, 20, bottomPad + 18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE0E0E0),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            '메뉴판 언어 변경',
+            style: TextStyle(
+              color: Color(0xFF1A1A1A),
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '촬영할 메뉴판의 언어를 선택해 주세요. 결과는 한국어로 표시돼요.',
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 18),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.48,
+            ),
+            child: GridView.builder(
+              shrinkWrap: true,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                childAspectRatio: 0.92,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+              ),
+              itemCount: departureLanguageOptions.length,
+              itemBuilder: (_, index) {
+                final option = departureLanguageOptions[index];
+                return _CameraLanguageOption(
+                  option: option,
+                  isSelected: option.code == selectedCode,
+                  onTap: () => Navigator.pop(context, option.code),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CameraLanguageOption extends StatelessWidget {
+  const _CameraLanguageOption({
+    required this.option,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final LanguageOption option;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isSelected ? const Color(0xFFF06292) : const Color(0xFFFFF8FA),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: isSelected
+                ? null
+                : Border.all(color: const Color(0xFFFCE4EC)),
+            boxShadow: [
+              BoxShadow(
+                color: isSelected
+                    ? const Color(0xFFF06292).withValues(alpha: 0.24)
+                    : Colors.black.withValues(alpha: 0.03),
+                blurRadius: isSelected ? 10 : 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(option.flag, style: const TextStyle(fontSize: 25)),
+                    const SizedBox(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Text(
+                        option.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.black87,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Text(
+                        option.nativeName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: isSelected
+                              ? Colors.white.withValues(alpha: 0.76)
+                              : Colors.black38,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isSelected)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      color: Color(0xFFF06292),
+                      size: 12,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
