@@ -79,9 +79,9 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
       });
     } on CameraException catch (error) {
       if (!mounted) return;
+      debugPrint('카메라 초기화 오류: ${error.code} ${error.description}');
       setState(() {
         _errorMessage =
-            error.description ??
             '\uce74\uba54\ub77c\ub97c \uc2dc\uc791\ud560 \uc218 \uc5c6\uc5b4\uc694';
         _isInitializing = false;
       });
@@ -145,11 +145,11 @@ class _MenuCameraScreenState extends State<MenuCameraScreen>
       );
     } on CameraException catch (error) {
       if (!mounted) return;
+      debugPrint('사진 촬영 오류: ${error.code} ${error.description}');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
-            error.description ??
-                '\uc0ac\uc9c4\uc744 \ucd2c\uc601\ud560 \uc218 \uc5c6\uc5b4\uc694',
+            '\uc0ac\uc9c4\uc744 \ucd2c\uc601\ud560 \uc218 \uc5c6\uc5b4\uc694. \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.',
           ),
         ),
       );

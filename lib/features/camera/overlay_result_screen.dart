@@ -302,6 +302,41 @@ class _OverlayImageView extends StatelessWidget {
         : null;
   }
 
+  bool _shouldInferVerticalText(
+    _PendingOverlayItem pending,
+    Map<String, OcrTextBlock> blockMap,
+  ) {
+    final item = pending.item;
+    if (item.itemType != 'menu_name' ||
+        item.layoutDirection != null ||
+        item.layoutRatio != null ||
+        pending.sourceBoxIds.length != 1) {
+      return false;
+    }
+
+    final block = blockMap[pending.sourceBoxIds.single];
+    if (block == null) return false;
+
+    final rawText = block.rawText.trim();
+    if (rawText.isEmpty ||
+        RegExp(r'[\s\d$¥￥₩€£%/\\|.,:;+\-=~]').hasMatch(rawText)) {
+      return false;
+    }
+
+    final characterCount = rawText.runes.length;
+    if (characterCount < 2 || characterCount > 8) return false;
+
+    final box = block.boundingBox;
+    if (box.width <= 0 || box.height <= 0) return false;
+
+    final aspectRatio = box.height / box.width;
+    final heightPerCharacter = aspectRatio / characterCount;
+
+    return aspectRatio >= 2.6 &&
+        heightPerCharacter >= 0.55 &&
+        heightPerCharacter <= 1.6;
+  }
+
   List<_ResolvedOverlayItem> _resolveOverlayItems({
     required Map<String, OcrTextBlock> blockMap,
     required double scaleX,
@@ -348,13 +383,15 @@ class _OverlayImageView extends StatelessWidget {
 
     for (final group in groupedBySingleSource.values) {
       if (group.length == 1) {
+        final pending = group.single;
+        final explicitDirection = _validLayoutDirection(
+          pending.item.layoutDirection,
+        );
+        final textDirection =
+            explicitDirection ??
+            (_shouldInferVerticalText(pending, blockMap) ? 'vertical' : null);
         resolved.add(
-          group.single.resolve(
-            group.single.sourceRect,
-            splitDirection: _validLayoutDirection(
-              group.single.item.layoutDirection,
-            ),
-          ),
+          pending.resolve(pending.sourceRect, splitDirection: textDirection),
         );
         continue;
       }
@@ -415,7 +452,7 @@ class _OverlayImageView extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Text(
-                '오버레이 좌표 정보를 불러오지 못했습니다.\n다시 촬영해 주세요.',
+                '분석 결과를 화면에 표시하지 못했어요.\n다시 촬영해 주세요.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
@@ -2255,7 +2292,11 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
   Future<MenuDetail> _loadDetail() async {
     final dishId = _item.dishId;
     if (dishId == null) {
-      throw const MenuDetailException('Dish ID가 없어 메뉴 상세 정보를 불러올 수 없습니다.');
+      throw const MenuDetailException(
+        'Dish ID가 없어 메뉴 상세 정보를 불러올 수 없습니다.',
+        userMessage: '이 메뉴의 상세 정보는 아직 제공되지 않아요.',
+        canRetry: false,
+      );
     }
 
     final details = await MenuDetailClient.fetchMenuDetails([dishId]);
@@ -2265,7 +2306,11 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
       }
     }
 
-    throw const MenuDetailException('해당 메뉴의 상세 정보를 찾지 못했습니다.');
+    throw const MenuDetailException(
+      '해당 메뉴의 상세 정보를 찾지 못했습니다.',
+      userMessage: '이 메뉴의 상세 정보는 아직 제공되지 않아요.',
+      canRetry: false,
+    );
   }
 
   void _retry() {
@@ -2568,10 +2613,13 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
                   snapshot.connectionState != ConnectionState.done;
               final recommendation = _recommendation;
               final errorMessage = error is MenuDetailException
-                  ? error.message
+                  ? error.userMessage
                   : error != null
-                  ? '메뉴 상세 정보를 불러오지 못했습니다.'
+                  ? '메뉴 상세 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'
                   : null;
+              final canRetry = error is MenuDetailException
+                  ? error.canRetry
+                  : error != null;
 
               return SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
@@ -2736,21 +2784,23 @@ class _MenuDetailSheetState extends State<_MenuDetailSheet> {
                                     height: 1.5,
                                   ),
                                 ),
-                                const SizedBox(height: 12),
-                                OutlinedButton.icon(
-                                  onPressed: _retry,
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.white,
-                                    side: const BorderSide(
-                                      color: Colors.white24,
+                                if (canRetry) ...[
+                                  const SizedBox(height: 12),
+                                  OutlinedButton.icon(
+                                    onPressed: _retry,
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.white,
+                                      side: const BorderSide(
+                                        color: Colors.white24,
+                                      ),
                                     ),
+                                    icon: const Icon(
+                                      Icons.refresh_rounded,
+                                      size: 16,
+                                    ),
+                                    label: const Text('다시 시도'),
                                   ),
-                                  icon: const Icon(
-                                    Icons.refresh_rounded,
-                                    size: 16,
-                                  ),
-                                  label: const Text('다시 시도'),
-                                ),
+                                ],
                               ],
                             )
                           : Row(

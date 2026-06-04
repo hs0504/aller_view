@@ -10,8 +10,7 @@ import 'ocr_result.dart';
 class VisionApiClient {
   VisionApiClient._();
 
-  static const _endpoint =
-      'https://vision.googleapis.com/v1/images:annotate';
+  static const _endpoint = 'https://vision.googleapis.com/v1/images:annotate';
   static const _retakeMessage =
       '텍스트 위치 정보를 추출하지 못했어요. 메뉴판을 정면에서 더 선명하게 다시 촬영해 주세요.';
 
@@ -26,6 +25,7 @@ class VisionApiClient {
     if (apiKey.isEmpty) {
       throw const VisionApiException(
         'API 키가 설정되지 않았습니다. .env 파일을 확인해 주세요.',
+        userMessage: '현재 메뉴판 분석 서비스를 이용할 수 없어요. 잠시 후 다시 시도해 주세요.',
       );
     }
 
@@ -51,24 +51,28 @@ class VisionApiClient {
     } catch (_) {
       throw const VisionApiException(
         '네트워크 오류가 발생했습니다. 인터넷 연결을 확인해 주세요.',
+        userMessage: '인터넷 연결을 확인한 뒤 다시 시도해 주세요.',
       );
     }
 
     if (response.statusCode != 200) {
-      throw VisionApiException('서버 오류가 발생했습니다. (${response.statusCode})');
+      throw VisionApiException(
+        '서버 오류가 발생했습니다. (${response.statusCode})',
+        userMessage: '현재 메뉴판 분석 서비스를 이용할 수 없어요. 잠시 후 다시 시도해 주세요.',
+      );
     }
 
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final responses = body['responses'] as List<dynamic>;
     if (responses.isEmpty) {
-      throw const VisionApiException(_retakeMessage);
+      throw const VisionApiException(_retakeMessage, returnToCamera: true);
     }
 
     final firstResponse = responses.first as Map<String, dynamic>;
     final blockResult = _extractFromBlocks(firstResponse);
 
     if (blockResult == null || blockResult.isEmpty) {
-      throw const VisionApiException(_retakeMessage);
+      throw const VisionApiException(_retakeMessage, returnToCamera: true);
     }
 
     return blockResult;
@@ -205,9 +209,15 @@ class VisionApiClient {
 }
 
 class VisionApiException implements Exception {
-  const VisionApiException(this.message);
+  const VisionApiException(
+    this.message, {
+    String? userMessage,
+    this.returnToCamera = false,
+  }) : userMessage = userMessage ?? message;
 
   final String message;
+  final String userMessage;
+  final bool returnToCamera;
 
   @override
   String toString() => message;

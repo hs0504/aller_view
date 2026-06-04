@@ -1,9 +1,15 @@
 import '../network/dio_client.dart';
 
 class MenuDetailException implements Exception {
-  const MenuDetailException(this.message);
+  const MenuDetailException(
+    this.message, {
+    String? userMessage,
+    this.canRetry = true,
+  }) : userMessage = userMessage ?? message;
 
   final String message;
+  final String userMessage;
+  final bool canRetry;
 
   @override
   String toString() => message;
@@ -80,18 +86,25 @@ class MenuDetailClient {
     );
 
     if (response == null) {
-      throw const MenuDetailException('서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      throw const MenuDetailException(
+        '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        userMessage: '메뉴 상세 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+      );
     }
 
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw MenuDetailException(
         '메뉴 상세 정보를 불러오지 못했습니다. (${response.statusCode})',
+        userMessage: '메뉴 상세 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
       );
     }
 
     final data = response.data;
     if (data is! List) {
-      throw const MenuDetailException('메뉴 상세 정보 응답 형식이 올바르지 않습니다.');
+      throw const MenuDetailException(
+        '메뉴 상세 정보 응답 형식이 올바르지 않습니다.',
+        userMessage: '메뉴 상세 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+      );
     }
 
     return data.map<MenuDetail>((entry) {
@@ -103,7 +116,10 @@ class MenuDetailClient {
           entry.map((key, value) => MapEntry(key.toString(), value)),
         );
       }
-      throw const MenuDetailException('메뉴 상세 정보 응답 형식이 올바르지 않습니다.');
+      throw const MenuDetailException(
+        '메뉴 상세 정보 응답 형식이 올바르지 않습니다.',
+        userMessage: '메뉴 상세 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+      );
     }).toList();
   }
 }

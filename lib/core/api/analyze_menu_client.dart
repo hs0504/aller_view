@@ -155,6 +155,7 @@ class AnalyzeMenuClient {
     if (_baseUrl.contains('YOUR_SERVER_URL')) {
       throw const AnalyzeMenuException(
         'AnalyzeMenuClient의 baseUrl을 실제 서버 주소로 변경해 주세요.',
+        userMessage: '현재 메뉴판 분석 서비스를 이용할 수 없어요. 잠시 후 다시 시도해 주세요.',
       );
     }
 
@@ -206,7 +207,10 @@ class AnalyzeMenuClient {
         _ => '${e.runtimeType}: $e',
       };
       debugPrint('[AnalyzeMenu] 네트워크 오류: $detail');
-      throw AnalyzeMenuException('네트워크 오류가 발생했습니다.\n$detail');
+      throw AnalyzeMenuException(
+        '네트워크 오류가 발생했습니다.\n$detail',
+        userMessage: '인터넷 연결을 확인한 뒤 다시 시도해 주세요.',
+      );
     }
 
     final responseBody = utf8.decode(response.bodyBytes);
@@ -225,7 +229,10 @@ class AnalyzeMenuClient {
     debugPrint('└─────────────────────────────────────────');
 
     if (response.statusCode != 200) {
-      throw AnalyzeMenuException('서버 오류가 발생했습니다. (${response.statusCode})');
+      throw AnalyzeMenuException(
+        '서버 오류가 발생했습니다. (${response.statusCode})',
+        userMessage: '메뉴판 분석을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.',
+      );
     }
 
     try {
@@ -241,6 +248,7 @@ class AnalyzeMenuClient {
         final code = parsedResponse.errorCode;
         throw AnalyzeMenuException(
           code == null ? message : '$message ($code)',
+          userMessage: '메뉴판을 분석하지 못했어요. 메뉴판이 잘 보이도록 다시 촬영해 주세요.',
           returnToCamera: true,
         );
       }
@@ -248,7 +256,10 @@ class AnalyzeMenuClient {
     } catch (e) {
       if (e is AnalyzeMenuException) rethrow;
       debugPrint('[AnalyzeMenu] 응답 파싱 오류: $e');
-      throw const AnalyzeMenuException('응답 형식이 올바르지 않습니다.');
+      throw const AnalyzeMenuException(
+        '응답 형식이 올바르지 않습니다.',
+        userMessage: '분석 결과를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+      );
     }
   }
 
@@ -283,9 +294,14 @@ class AnalyzeMenuClient {
 }
 
 class AnalyzeMenuException implements Exception {
-  const AnalyzeMenuException(this.message, {this.returnToCamera = false});
+  const AnalyzeMenuException(
+    this.message, {
+    String? userMessage,
+    this.returnToCamera = false,
+  }) : userMessage = userMessage ?? message;
 
   final String message;
+  final String userMessage;
   final bool returnToCamera;
 
   @override

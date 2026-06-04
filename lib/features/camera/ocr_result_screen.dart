@@ -82,8 +82,8 @@ class _OcrResultScreenState extends State<OcrResultScreen>
       } on VisionApiException catch (error) {
         if (!mounted) return;
         setState(() {
-          _errorMessage = error.message;
-          _returnToCameraOnError = true;
+          _errorMessage = error.userMessage;
+          _returnToCameraOnError = error.returnToCamera;
         });
         return;
       }
@@ -123,6 +123,7 @@ class _OcrResultScreenState extends State<OcrResultScreen>
               _analysisTimeout,
               onTimeout: () => throw const AnalyzeMenuException(
                 '\ubd84\uc11d \uc694\uccad\uc774 30\ucd08 \uc548\uc5d0 \uc644\ub8cc\ub418\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4. \uba54\uc778 \ud654\uba74\uc73c\ub85c \ub3cc\uc544\uac00 \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.',
+                userMessage: '분석이 예상보다 오래 걸리고 있어요. 잠시 후 다시 시도해 주세요.',
               ),
             );
       } catch (error) {
@@ -218,9 +219,9 @@ class _OcrResultScreenState extends State<OcrResultScreen>
 
   String _errorMessageFrom(Object error) {
     if (error is AnalyzeMenuException) {
-      return error.message;
+      return error.userMessage;
     }
-    return error.toString();
+    return '분석 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.';
   }
 
   void _handleErrorAction() {
