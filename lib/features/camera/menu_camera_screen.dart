@@ -300,6 +300,9 @@ class _CameraTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final departure = _findOption(departureCode);
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 380;
+    final titleSideInset = compact ? 94.0 : 126.0;
 
     return SizedBox(
       height: 44,
@@ -313,27 +316,32 @@ class _CameraTopBar extends StatelessWidget {
               onPressed: onClose,
             ),
           ),
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 132),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.white24),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 10,
+          Positioned.fill(
+            left: titleSideInset,
+            right: titleSideInset,
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white24),
                   ),
-                  child: Text(
-                    '\uba54\ub274\ud310 \ucd2c\uc601',
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 10,
+                    ),
+                    child: Text(
+                      '\uba54\ub274\ud310 \ucd2c\uc601',
+                      maxLines: 1,
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: compact ? 14 : 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                   ),
                 ),
@@ -342,7 +350,11 @@ class _CameraTopBar extends StatelessWidget {
           ),
           Align(
             alignment: Alignment.centerRight,
-            child: _TopLanguageChip(departure: departure, onTap: onLanguageTap),
+            child: _TopLanguageChip(
+              departure: departure,
+              onTap: onLanguageTap,
+              compact: compact,
+            ),
           ),
         ],
       ),
@@ -351,15 +363,20 @@ class _CameraTopBar extends StatelessWidget {
 }
 
 class _TopLanguageChip extends StatelessWidget {
-  const _TopLanguageChip({required this.departure, required this.onTap});
+  const _TopLanguageChip({
+    required this.departure,
+    required this.onTap,
+    required this.compact,
+  });
 
   final LanguageOption departure;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 122),
+      constraints: BoxConstraints(maxWidth: compact ? 92 : 116),
       child: Material(
         color: Colors.black.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(999),
@@ -368,7 +385,7 @@ class _TopLanguageChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           child: Container(
             height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(999),
               border: Border.all(color: Colors.white24),
@@ -376,25 +393,28 @@ class _TopLanguageChip extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(departure.flag, style: const TextStyle(fontSize: 16)),
-                const SizedBox(width: 6),
+                Text(
+                  departure.flag,
+                  style: TextStyle(fontSize: compact ? 15 : 16),
+                ),
+                SizedBox(width: compact ? 4 : 6),
                 Flexible(
                   child: Text(
                     departure.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 12,
+                      fontSize: compact ? 11 : 12,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
-                const SizedBox(width: 5),
+                SizedBox(width: compact ? 3 : 5),
                 Icon(
                   Icons.expand_more_rounded,
                   color: Colors.white.withValues(alpha: 0.82),
-                  size: 16,
+                  size: compact ? 15 : 16,
                 ),
               ],
             ),

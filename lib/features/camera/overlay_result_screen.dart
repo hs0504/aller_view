@@ -337,6 +337,25 @@ class _OverlayImageView extends StatelessWidget {
         heightPerCharacter <= 1.6;
   }
 
+  bool _shouldWrapMergedVerticalText(_PendingOverlayItem pending) {
+    final direction = _validLayoutDirection(pending.item.layoutDirection);
+    if (direction != 'vertical' || pending.item.itemType != 'menu_name') {
+      return false;
+    }
+
+    final rect = pending.sourceRect;
+    if (rect.width <= 0 || rect.height <= 0) return false;
+
+    return rect.width / rect.height >= 1.45;
+  }
+
+  String? _textDirectionForMergedItem(_PendingOverlayItem pending) {
+    final direction = _validLayoutDirection(pending.item.layoutDirection);
+    if (direction != 'vertical') return direction;
+
+    return _shouldWrapMergedVerticalText(pending) ? null : direction;
+  }
+
   List<_ResolvedOverlayItem> _resolveOverlayItems({
     required Map<String, OcrTextBlock> blockMap,
     required double scaleX,
@@ -375,7 +394,10 @@ class _OverlayImageView extends StatelessWidget {
         resolved.add(
           pending.resolve(
             pending.sourceRect,
-            splitDirection: _validLayoutDirection(pending.item.layoutDirection),
+            splitDirection: _textDirectionForMergedItem(pending),
+            maxTextLines: _shouldWrapMergedVerticalText(pending)
+                ? pending.sourceBoxIds.length.clamp(2, 3).toInt()
+                : null,
           ),
         );
       }
@@ -541,12 +563,17 @@ class _PendingOverlayItem {
   final List<String> sourceBoxIds;
   final Rect sourceRect;
 
-  _ResolvedOverlayItem resolve(Rect rect, {String? splitDirection}) {
+  _ResolvedOverlayItem resolve(
+    Rect rect, {
+    String? splitDirection,
+    int? maxTextLines,
+  }) {
     return _ResolvedOverlayItem(
       item: item,
       text: text,
       rect: rect,
       splitDirection: splitDirection,
+      maxTextLines: maxTextLines,
     );
   }
 }
@@ -557,12 +584,14 @@ class _ResolvedOverlayItem {
     required this.text,
     required this.rect,
     this.splitDirection,
+    this.maxTextLines,
   });
 
   final AnalyzedMenuItem item;
   final String text;
   final Rect rect;
   final String? splitDirection;
+  final int? maxTextLines;
 }
 
 class _OverlayColorLegend extends StatelessWidget {
@@ -1433,6 +1462,8 @@ class _OverlayBox extends StatelessWidget {
         : math.max(rect.height, 24.0);
     final label = overlayItem.text;
     final displayLabel = _isVerticalSplit ? _verticalText(label) : label;
+    final forcedMaxLines = overlayItem.maxTextLines;
+    final shouldWrapWithinSource = forcedMaxLines != null && !_isVerticalSplit;
     final color = _overlayColor;
     const recommendedColor = Color(0xFFFFC107);
     final horizontalPadding = originalWidth < 64 ? 4.0 : 6.0;
@@ -1449,20 +1480,25 @@ class _OverlayBox extends StatelessWidget {
       textDirection,
       maxLines: _isVerticalSplit ? null : 1,
     );
-    final desiredWidth = math.max(
-      originalWidth,
-      singleLinePainter.width +
-          horizontalPadding +
-          rightTextPadding +
-          _overlayTextWidthSafetyBuffer,
-    );
+    final desiredWidth = shouldWrapWithinSource
+        ? originalWidth
+        : math.max(
+            originalWidth,
+            singleLinePainter.width +
+                horizontalPadding +
+                rightTextPadding +
+                _overlayTextWidthSafetyBuffer,
+          );
     final overlayWidth = math.min(desiredWidth, math.max(1.0, canvasWidth));
     final overlayLeft = originalLeft
         .clamp(0.0, math.max(0.0, canvasWidth - overlayWidth))
         .toDouble();
-    final wrapsToTwoLines = desiredWidth > canvasWidth;
+    final wrapsToTwoLines =
+        shouldWrapWithinSource || desiredWidth > canvasWidth;
     final effectiveMaxLines = _isVerticalSplit
         ? null
+        : shouldWrapWithinSource
+        ? forcedMaxLines
         : (wrapsToTwoLines ? 2 : 1);
     final availableTextWidth = math.max(
       1.0,
@@ -1474,7 +1510,7 @@ class _OverlayBox extends StatelessWidget {
             probeTextStyle,
             textDirection,
             maxWidth: availableTextWidth,
-            maxLines: 2,
+            maxLines: effectiveMaxLines,
           )
         : null;
     final overlayHeight = wrapsToTwoLines && !_isVerticalSplit
@@ -1493,7 +1529,11 @@ class _OverlayBox extends StatelessWidget {
       maxWidth: availableTextWidth,
       maxHeight: textHeightBudget,
       maxLines: effectiveMaxLines,
-      minFontSize: _isVerticalSplit ? 6.0 : 12.0,
+      minFontSize: _isVerticalSplit
+          ? 6.0
+          : shouldWrapWithinSource
+          ? 8.0
+          : 12.0,
     );
     final textStyle = GoogleFonts.blackHanSans(
       color: Colors.white,
@@ -1565,7 +1605,9 @@ class _OverlayBox extends StatelessWidget {
               child: Text(
                 displayLabel,
                 maxLines: effectiveMaxLines,
-                softWrap: !_isVerticalSplit && wrapsToTwoLines,
+                softWrap:
+                    shouldWrapWithinSource ||
+                    (!_isVerticalSplit && wrapsToTwoLines),
                 overflow: TextOverflow.visible,
                 textScaler: TextScaler.noScaling,
                 textAlign: _isVerticalSplit
