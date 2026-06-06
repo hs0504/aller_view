@@ -1429,11 +1429,15 @@ class _OverlayBox extends StatelessWidget {
     if (convertedPrice == null || convertedPrice.trim().isEmpty) {
       return;
     }
+    final translatedPrice = item.content.translatedText?.trim();
+    final displayPrice = translatedPrice != null && translatedPrice.isNotEmpty
+        ? translatedPrice
+        : item.originalText;
 
     showDialog<void>(
       context: context,
       builder: (_) => _PriceConversionDialog(
-        rawPrice: item.originalText,
+        rawPrice: displayPrice,
         convertedPrice: convertedPrice,
       ),
     );
@@ -2114,7 +2118,7 @@ class _PriceConversionDialog extends StatelessWidget {
                 ),
                 const SizedBox(height: 22),
                 if (hasRawPrice) ...[
-                  _PriceValueRow(label: '원본 가격', value: rawPrice.trim()),
+                  _PriceValueRow(label: '표시 가격', value: rawPrice.trim()),
                   const SizedBox(height: 12),
                 ],
                 Container(
