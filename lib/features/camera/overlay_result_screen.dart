@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/data/allergy_data.dart';
@@ -35,20 +33,6 @@ const double _overlayTextRightSafetyPadding = 6.0;
 const double _overlayTextWidthSafetyBuffer = 2.0;
 const double _menuDetailSheetHeightRatio = 0.82;
 
-class OverlayDebugInfo {
-  const OverlayDebugInfo({
-    required this.requestUrl,
-    required this.requestJson,
-    required this.ocrLines,
-    this.failureMessage,
-  });
-
-  final String requestUrl;
-  final String requestJson;
-  final List<String> ocrLines;
-  final String? failureMessage;
-}
-
 class OverlayResultScreen extends StatelessWidget {
   const OverlayResultScreen({
     super.key,
@@ -58,7 +42,6 @@ class OverlayResultScreen extends StatelessWidget {
     required this.ocrResult,
     required this.response,
     this.isDummy = false,
-    this.debugInfo,
   });
 
   final Uint8List imageBytes;
@@ -67,7 +50,6 @@ class OverlayResultScreen extends StatelessWidget {
   final OcrResult ocrResult;
   final AnalyzeMenuResponse response;
   final bool isDummy;
-  final OverlayDebugInfo? debugInfo;
 
   Set<String> get _recommendedItemIds => {
     for (final item in response.recommendations) item.itemId,
@@ -75,31 +57,6 @@ class OverlayResultScreen extends StatelessWidget {
   Map<String, RecommendedMenuItem> get _recommendedItemsById => {
     for (final item in response.recommendations) item.itemId: item,
   };
-
-  void _showDebugInfo(BuildContext context) {
-    final info = debugInfo;
-    if (info == null) return;
-
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _OverlayDebugSheet(debugInfo: info),
-    );
-  }
-
-  void _showApiDebugInfo(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _ApiDebugSheet(
-        response: response,
-        ocrLines: ocrResult.lines,
-        failureMessage: debugInfo?.failureMessage,
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -114,22 +71,10 @@ class OverlayResultScreen extends StatelessWidget {
           '오버레이 결과',
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bug_report_outlined),
-            onPressed: () => _showApiDebugInfo(context),
-            tooltip: '디버그',
-          ),
-        ],
       ),
       body: Column(
         children: [
-          if (isDummy)
-            _DummyBanner(
-              onPressed: debugInfo == null
-                  ? null
-                  : () => _showDebugInfo(context),
-            ),
+          if (isDummy) const _DummyBanner(),
           Expanded(
             child: _OverlayImageView(
               imageBytes: imageBytes,
@@ -151,9 +96,7 @@ class OverlayResultScreen extends StatelessWidget {
 }
 
 class _DummyBanner extends StatelessWidget {
-  const _DummyBanner({required this.onPressed});
-
-  final VoidCallback? onPressed;
+  const _DummyBanner();
 
   @override
   Widget build(BuildContext context) {
@@ -187,20 +130,6 @@ class _DummyBanner extends StatelessWidget {
                   ),
                 ),
               ),
-              if (onPressed != null)
-                TextButton(
-                  onPressed: onPressed,
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFFFD54F),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: const Text('테스트 정보'),
-                ),
             ],
           ),
         ),
@@ -3093,319 +3022,6 @@ class LegacyMenuDetailSheet extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OverlayDebugSheet extends StatelessWidget {
-  const _OverlayDebugSheet({required this.debugInfo});
-
-  final OverlayDebugInfo debugInfo;
-
-  String get _ocrSummary {
-    if (debugInfo.ocrLines.isEmpty) {
-      return '(empty)';
-    }
-
-    return List<String>.generate(
-      debugInfo.ocrLines.length,
-      (index) => '${index + 1}. ${debugInfo.ocrLines[index]}',
-    ).join('\n');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.72,
-      maxChildSize: 0.95,
-      minChildSize: 0.4,
-      builder: (_, scrollController) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: ListView(
-          controller: scrollController,
-          padding: EdgeInsets.fromLTRB(
-            16,
-            12,
-            16,
-            16 + MediaQuery.of(context).padding.bottom,
-          ),
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              '테스트 정보',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (debugInfo.failureMessage != null) ...[
-              const SizedBox(height: 16),
-              _DebugSection(
-                title: '더미 결과 전환 사유',
-                child: SelectableText(
-                  debugInfo.failureMessage!,
-                  style: const TextStyle(
-                    color: Color(0xFFFFCC80),
-                    fontSize: 13,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-            _DebugSection(
-              title: 'OCR 추출 결과',
-              child: SelectableText(
-                _ocrSummary,
-                style: const TextStyle(
-                  color: Color(0xFFCE9178),
-                  fontSize: 12,
-                  height: 1.6,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _DebugSection(
-              title: '요청 URL',
-              child: SelectableText(
-                debugInfo.requestUrl,
-                style: const TextStyle(
-                  color: Color(0xFF9CDCFE),
-                  fontSize: 12,
-                  height: 1.6,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _DebugSection(
-              title: '요청 JSON',
-              child: SelectableText(
-                debugInfo.requestJson,
-                style: const TextStyle(
-                  color: Color(0xFF9CDCFE),
-                  fontSize: 12,
-                  height: 1.6,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DebugSection extends StatelessWidget {
-  const _DebugSection({
-    required this.title,
-    required this.child,
-    this.copyText,
-  });
-
-  final String title;
-  final Widget child;
-  final String? copyText;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFF2D2D2D),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                if (copyText != null)
-                  GestureDetector(
-                    onTap: () async {
-                      await Clipboard.setData(ClipboardData(text: copyText!));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('복사됐어요.'),
-                            duration: Duration(seconds: 1),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.only(left: 8),
-                      child: Icon(
-                        Icons.copy_rounded,
-                        size: 16,
-                        color: Colors.white38,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ApiDebugSheet extends StatelessWidget {
-  const _ApiDebugSheet({
-    required this.response,
-    required this.ocrLines,
-    this.failureMessage,
-  });
-
-  final AnalyzeMenuResponse response;
-  final List<String> ocrLines;
-  final String? failureMessage;
-
-  String get _ocrSummary => ocrLines.isEmpty
-      ? '(empty)'
-      : ocrLines.indexed.map((e) => '${e.$1 + 1}. ${e.$2}').join('\n');
-
-  String get _prettyResponseJson {
-    try {
-      return const JsonEncoder.withIndent(
-        '  ',
-      ).convert(jsonDecode(response.rawResponseBody));
-    } catch (_) {
-      return response.rawResponseBody;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.72,
-      maxChildSize: 0.95,
-      minChildSize: 0.4,
-      builder: (_, scrollController) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: ListView(
-          controller: scrollController,
-          padding: EdgeInsets.fromLTRB(
-            16,
-            12,
-            16,
-            16 + MediaQuery.of(context).padding.bottom,
-          ),
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'API 디버그 정보',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (failureMessage != null) ...[
-              const SizedBox(height: 16),
-              _DebugSection(
-                title: '오류 메시지',
-                copyText: failureMessage,
-                child: SelectableText(
-                  failureMessage!,
-                  style: const TextStyle(
-                    color: Color(0xFFFFCC80),
-                    fontSize: 13,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-            _DebugSection(
-              title: 'OCR 추출 결과',
-              copyText: _ocrSummary,
-              child: SelectableText(
-                _ocrSummary,
-                style: const TextStyle(
-                  color: Color(0xFFCE9178),
-                  fontSize: 12,
-                  height: 1.6,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _DebugSection(
-              title: '요청 JSON',
-              copyText: response.requestJson,
-              child: SelectableText(
-                response.requestJson,
-                style: const TextStyle(
-                  color: Color(0xFF9CDCFE),
-                  fontSize: 12,
-                  height: 1.6,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _DebugSection(
-              title: '응답 JSON',
-              copyText: _prettyResponseJson,
-              child: SelectableText(
-                _prettyResponseJson,
-                style: const TextStyle(
-                  color: Color(0xFFB5CEA8),
-                  fontSize: 12,
-                  height: 1.6,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
