@@ -128,7 +128,7 @@ class _LanguageSettingScreenState extends State<LanguageSettingScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '\ucd5c\uc885\u0020\uc2dc\uc5f0\u0020\ubc84\uc804\uc5d0\uc11c\ub294\u0020\ud55c\uad6d\uc5b4\u0020\uc0ac\uc6a9\uc790\uc5d0\uac8c\u0020\ub9de\ucdb0\u0020\uacb0\uacfc\ub97c\u0020\uc81c\uacf5\ud569\ub2c8\ub2e4\u002e',
+                          '\uc120\ud0dd\ud55c\u0020\uba54\ub274\ud310\u0020\uc5b8\uc5b4\ub97c\u0020\ubd84\uc11d\ud55c\u0020\ub4a4\u002c\u0020\uacb0\uacfc\ub294\u0020\ud55c\uad6d\uc5b4\ub85c\u0020\uc81c\uacf5\ub3fc\uc694\u002e',
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey[600],

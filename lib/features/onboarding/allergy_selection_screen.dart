@@ -131,7 +131,7 @@ class _AllergySelectionScreenState extends State<AllergySelectionScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                if (!widget.isEditMode) _StepIndicator(current: 1, total: 2),
+                if (!widget.isEditMode) _StepIndicator(current: 2, total: 3),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
                   child: Text(

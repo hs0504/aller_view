@@ -156,7 +156,7 @@ class _PreferenceSelectionScreenState extends State<PreferenceSelectionScreen> {
                 child: Column(
                   children: [
                     if (!widget.isEditMode)
-                      const _StepIndicator(current: 2, total: 2),
+                      const _StepIndicator(current: 3, total: 3),
                     const Padding(
                       padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
                       child: Text(
