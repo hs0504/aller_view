@@ -51,4 +51,4 @@ app.include_router(front_router)
 
 @app.get("/")
 def read_root():
-    return {"message": "AI 서버가 작동 중입니다!"}
+    return {"message": "AI 서버가 작동 중입니다!_2026년 6월 9일 업데이트 완료"}

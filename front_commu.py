@@ -3,10 +3,12 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import time
+from collections import Counter
 
 from prompt import process_llm
 from back_commu import fetch_analysis_from_backend
 from exchange import process_exchange_rates
+
 
 router = APIRouter()
 
@@ -79,7 +81,7 @@ class AnalyzeMenuResponse(BaseModel):
 def get_y_coords(vertices):
     return [v['y'] for v in vertices]
 
-def smart_chunking(raw_menus: list, target_size: int = 5, max_size: int = 10, safe_gap: int = 25) -> list:
+def smart_chunking(raw_menus: list, target_size: int = 5 , max_size: int = 8, safe_gap: int = 25) -> list:
     chunks = []
     current_chunk = []
     
@@ -113,7 +115,7 @@ def analyze_menu(request: AnalyzeMenuRequest):
     
     llm_input_data = [item.model_dump() for item in request.menu_items]
 
-    chunks = smart_chunking(llm_input_data, target_size=5, max_size=10, safe_gap=25)
+    chunks = smart_chunking(llm_input_data, target_size=5, max_size=8, safe_gap=25)
     
     print(f"[메뉴 병렬 분석 시작] 총 원본 아이템 개수: {len(llm_input_data)}개")
     print(f"[스마트 청킹 결과] 총 {len(chunks)}개의 스레드로 분할 호출합니다.")
@@ -129,6 +131,7 @@ def analyze_menu(request: AnalyzeMenuRequest):
     all_analyzed_items = []
     chunk_results = [[] for _ in range(len(chunks))]
     has_error = False
+    currency_votes = []
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(chunks)) as executor:
         future_to_idx = {
@@ -145,7 +148,16 @@ def analyze_menu(request: AnalyzeMenuRequest):
                 
             chunk_results[idx] = result.get("analyzed_menu_items", [])
 
+            chunk_currency = result.get("currency")
+            if chunk_currency:
+                currency_votes.append(chunk_currency.upper())
+
+    final_currency = "KRW"
+    if currency_votes:
+        final_currency = Counter(currency_votes).most_common(1)[0][0]
+
     print(f"⏱️ LLM 병렬 처리 소요 시간: {time.time() - llm_start_time:.2f}초")
+    print(f"💰 LLM이 추론한 메뉴판 통화 코드: {final_currency}")
 
     if has_error or not any(chunk_results):
         return AnalyzeMenuResponse(
@@ -157,8 +169,10 @@ def analyze_menu(request: AnalyzeMenuRequest):
         )
     
     all_analyzed_items = []
+
     for items in chunk_results:
-        all_analyzed_items.extend(items)
+         all_analyzed_items.extend(items)
+
 
     for idx, item in enumerate(all_analyzed_items):
         item["item_id"] = f"result_{idx + 1:03d}"
@@ -166,8 +180,7 @@ def analyze_menu(request: AnalyzeMenuRequest):
     
     llm_items = process_exchange_rates(
         llm_items = all_analyzed_items,
-        departure_lang = request.departure_language,
-        arrival_lang= request.arrival_language
+        departure_currency = final_currency,
     )
 
     backend_request_data = []
@@ -185,6 +198,7 @@ def analyze_menu(request: AnalyzeMenuRequest):
     backend_start_time = time.time()
 
     backend_response = fetch_analysis_from_backend(
+        departure_language = request.departure_language,
         user_allergies=request.user_allergies,
         user_preferences=request.user_preferences.model_dump(),
         normalized_items=backend_request_data

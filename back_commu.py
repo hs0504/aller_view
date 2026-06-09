@@ -3,17 +3,18 @@ import json
 
 BACKEND_URL = "https://allerview-729003075709.asia-northeast3.run.app/menu/analyze"
 
-def fetch_analysis_from_backend(user_allergies: list, user_preferences: dict, normalized_items: list) -> dict:
+def fetch_analysis_from_backend(departure_language: str,user_allergies: list, user_preferences: dict, normalized_items: list) -> dict:
 
 
     payload = {
+        "departure_language": departure_language,
         "user_allergies": user_allergies,
         "user_preferences": user_preferences,
         "menu_items": normalized_items
     }
 
     try:
-        response = requests.post(BACKEND_URL, json=payload, timeout=10.0)
+        response = requests.post(BACKEND_URL, json=payload, timeout=60.0)
         response.raise_for_status()
         return response.json()
         

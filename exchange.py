@@ -1,64 +1,52 @@
+# 2026년 6월 9일 기준
 
-# 2026년 5월 25일 기준
 CURRENCY_TO_KRW = {
-    "ko": 1.0,         # 한국어: 1원 = 1원
-    "en": 1506.0,      # 영어: 1달러 = 1506.0원 (USD)
-    "ja": 9.45,        # 일본어: 1엔 = 9.45원 (JPY)
-    "zh-CN": 222.08,   # 중국어 간체: 1위안 = 222.08원 (CNY)
-    "zh-TW": 47.97,    # 중국어 번체: 1대만달러 = 47.97원 (TWD)
-    "es": 1754.94,     # 스페인어: 1유로 = 1754.94원 (EUR)
-    "fr": 1754.94,     # 프랑스어: 1유로 = 1754.94원 (EUR)
-    "de": 1754.94,     # 독일어: 1유로 = 1754.94원 (EUR)
-    "it": 1754.94,     # 이탈리아어: 1유로 = 1754.94원 (EUR)
-    "pt": 1754.94,     # 포르투갈어: 1유로 = 1754.94원 (EUR)
-    "vi": 0.057,       # 베트남어: 1동 = 0.057원 (VND)
-    "th": 46.30,       # 태국어: 1바트 = 46.30원 (THB)
-    "id": 0.085,       # 인도네시아어: 1루피아 = 0.085원 (IDR)
-    "ar": 409.37,      # 아랍어: 1디르함 = 409.37원 (AED)
-    "ru": 21.22        # 러시아어: 1루블 = 21.22원 (RUB)
+    # 아시아 / 오세아니아
+    "KRW": 1.0,        # 대한민국 원
+    "JPY": 9.47,       # 일본 엔 (100엔 기준이 아닌 1엔 기준)
+    "CNY": 223.60,     # 중국 위안
+    "TWD": 47.99,      # 대만 달러
+    "HKD": 193.55,     # 홍콩 달러
+    "SGD": 1178.28,    # 싱가포르 달러
+    "VND": 0.058,      # 베트남 동
+    "THB": 46.22,      # 태국 바트
+    "IDR": 0.084,      # 인도네시아 루피아
+    "MYR": 376.35,     # 말레이시아 링깃
+    "PHP": 24.45,      # 필리핀 페소
+    "INR": 15.90,      # 인도 루피
+    "AUD": 1069.29,    # 호주 달러
+    "NZD": 878.58,     # 뉴질랜드 달러
+
+    # 아메리카
+    "USD": 1516.76,    # 미국 달러
+    "CAD": 1087.50,    # 캐나다 달러
+    "MXN": 86.47,      # 멕시코 페소
+    "BRL": 294.66,     # 브라질 헤알
+    "ARS": 1.04,       # 아르헨티나 페소
+    "CLP": 1.65,       # 칠레 페소
+    "COP": 0.42,       # 콜롬비아 페소
+
+    # 유럽
+    "EUR": 1749.86,    # 유럽 유로 (스페인, 프랑스, 독일, 이탈리아 등)
+    "GBP": 2024.88,    # 영국 파운드
+    "CHF": 1904.59,    # 스위스 프랑
+    "SEK": 161.37,     # 스웨덴 크로나
+    "NOK": 159.63,     # 노르웨이 크로네
+    "DKK": 232.94,     # 덴마크 크로네
+    "RUB": 20.59,      # 러시아 루블
+    "TRY": 32.81,      # 튀르키예 리라
+
+    # 중동 / 아프리카
+    "AED": 412.95,     # 아랍에미리트 디르함
+    "SAR": 404.34,     # 사우디아라비아 리얄
+    "QAR": 416.58,     # 카타르 리얄
+    "EGP": 29.00,      # 이집트 파운드
+    "ZAR": 91.53       # 남아공 랜드
 }
 
-def format_price_by_language(value: float, arrival_lang: str) -> str:
+def process_exchange_rates(llm_items: list, departure_currency: str) -> list:
+    dep_rate = CURRENCY_TO_KRW.get(departure_currency.upper(), 1.0)
     
-    if arrival_lang == "en":
-        return f"${value:,.2f}"  
-        
-    elif arrival_lang == "ja":
-        return f"¥{value:,.0f}"  
-        
-    elif arrival_lang == "zh-CN":
-        return f"¥{value:,.2f}"  
-        
-    elif arrival_lang == "zh-TW":
-        return f"NT${value:,.0f}"  
-        
-    elif arrival_lang in ["es", "fr", "de", "it", "pt"]:
-        return f"€{value:,.2f}"  
-        
-    elif arrival_lang == "vi":
-        return f"{value:,.0f}₫"  
-        
-    elif arrival_lang == "th":
-        return f"฿{value:,.2f}"  
-        
-    elif arrival_lang == "id":
-        return f"Rp {value:,.0f}"  
-        
-    elif arrival_lang == "ar":
-        return f"AED {value:,.2f}"  
-        
-    elif arrival_lang == "ru":
-        return f"₽{value:,.2f}"  
-        
-    else:
-        return f"{value:,.0f}원"
-
-
-def process_exchange_rates(llm_items: list, departure_lang: str, arrival_lang: str) -> list:
-    
-    dep_rate = CURRENCY_TO_KRW.get(departure_lang, 1.0)
-    arr_rate = CURRENCY_TO_KRW.get(arrival_lang, 1.0)
-
     for item in llm_items:
         content = item.get("content", {})
         
@@ -67,17 +55,13 @@ def process_exchange_rates(llm_items: list, departure_lang: str, arrival_lang: s
                 raw_price_str = str(content["converted_price"]).replace(",", "").strip()
                 pure_number = float(raw_price_str)
 
-                if departure_lang == "ko":
+                if departure_currency.upper() == "KRW":
                     if pure_number < 100 or "." in raw_price_str:
                         pure_number *= 1000
                 
                 price_in_krw = pure_number * dep_rate
                 
-                final_converted_value = price_in_krw / arr_rate
-                
-                final_price_str = format_price_by_language(final_converted_value, arrival_lang)
-                
-                content["converted_price"] = final_price_str
+                content["converted_price"] = f"{price_in_krw:,.0f}원"
                 
             except ValueError:
                 content["converted_price"] = content.get("raw_text", "")
