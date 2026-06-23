@@ -1,4 +1,4 @@
-name: aller_view
+name: allerview
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.9.2
+  sdk: ^3.9.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -33,7 +33,28 @@ dependencies:
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
+  http: ^1.6.0
+  camera: ^0.12.0+1
+  image: ^4.8.0
+  permission_handler: ^12.0.1
+  flutter_dotenv: ^5.2.1
+  google_fonts: ^6.2.1
+
   cupertino_icons: ^1.0.8
+  location: ^5.0.0
+  geolocator: ^14.0.2
+  google_maps_flutter: ^2.14.2
+  sliding_up_panel: ^2.0.0+1
+
+  dio: ^5.3.2
+  retrofit: ^4.0.3
+  json_annotation: ^4.8.1
+  supabase_flutter: ^2.12.2
+  google_sign_in: ^6.2.1
+  shared_preferences: ^2.5.5
+  flutter_secure_storage: ^10.0.0
+  flutter_svg: ^2.0.10+1
+  image_picker: ^1.2.2
 
 dev_dependencies:
   flutter_test:
@@ -56,6 +77,12 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - .env
+    - assets/images/allerview_logo_transparent.png
+    - assets/images/gallery_observe_static.png
+    - assets/images/splash_mascots.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
