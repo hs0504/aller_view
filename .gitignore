@@ -11,6 +11,7 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+README.md
 
 # IntelliJ related
 *.iml
@@ -43,3 +44,25 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local secrets
+.env
+.env.*
+!.env.example
+*.key
+*secret*
+*credential*
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# Design analysis files (local only)
+design_mockup.html
+loading_analysis.html
+allergy_desc_analysis.html
+
+# Claude Code config (personal dev tool)
+CLAUDE.md
+
+# Temporary AI-generated image files (local only)
+.codex_tmp/
